@@ -1,0 +1,12 @@
+<svg width="260" height="60" viewBox="0 0 260 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="8" y="12" width="40" height="36" rx="10" fill="#F8F9FA" stroke="#38BDF8" stroke-width="3"/>
+  <rect x="20" y="22" width="16" height="16" rx="5" fill="#38BDF8" opacity="0.16"/>
+  <path d="M20 40C22 32 24 20 28 20C32 20 34 32 36 40" stroke="#38BDF8" stroke-width="2"/>
+  <circle cx="28" cy="16" r="4" fill="#38BDF8" />
+  <text x="58" y="40" font-family="Segoe UI, Arial, sans-serif" font-size="32" fill="#0A2233" font-weight="700">
+    PHPsychometric
+  </text>
+  <text x="60" y="54" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#38BDF8">
+    Open Online Psychometrics
+  </text>
+</svg>

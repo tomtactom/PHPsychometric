@@ -1,0 +1,58 @@
+# .htaccess für Online-Fragebogen-Plattform
+
+# 1. Standard: UTF-8 Encoding überall
+AddDefaultCharset UTF-8
+
+# 2. DirectoryIndex setzen (optional)
+DirectoryIndex index.php index.html
+
+# 3. Schutz vor Directory Listing
+Options -Indexes
+
+# 4. PHP-Fehler nicht anzeigen (bei Bedarf, Prod)
+# php_flag display_errors Off
+
+# 5. Schutz vor direktem Zugriff auf sensible Dateien
+<FilesMatch "\.(inc\.php|private\.php|config\.php|config\.private\.php|sql|db\.sql|env|md|yml|json)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# 6. Zugriff auf .git und andere VCS-Dateien verbieten
+RedirectMatch 404 /\.git
+RedirectMatch 404 /\.svn
+RedirectMatch 404 /\.hg
+
+# 7. Caching (optional, kann die Performance erhöhen)
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+</IfModule>
+
+# 8. Sicherheit: XSS- und MIME-Type-Header
+<IfModule mod_headers.c>
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-Content-Type-Options "nosniff"
+    Header set Referrer-Policy "same-origin"
+</IfModule>
+
+# 9. (Optional) Weiterleitung auf HTTPS erzwingen
+# <IfModule mod_rewrite.c>
+#   RewriteEngine On
+#   RewriteCond %{HTTPS} !=on
+#   RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+# </IfModule>
+
+# 10. (Optional) Clean URLs (z.B. für "pretty URLs" oder ein Framework)
+# <IfModule mod_rewrite.c>
+#   RewriteEngine On
+#   RewriteCond %{REQUEST_FILENAME} !-f
+#   RewriteCond %{REQUEST_FILENAME} !-d
+#   RewriteRule ^(.+)$ index.php?url=$1 [QSA,L]
+# </IfModule>

@@ -1,0 +1,7 @@
+<?php
+// config.private.php
+define('DB_HOST', 'localhost');
+define('DB_NAME', 'deinedatenbank');
+define('DB_USER', 'deinbenutzer');
+define('DB_PASS', 'deinpasswort');
+?>
