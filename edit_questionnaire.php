@@ -18,6 +18,7 @@ if ($qid !== null) {
         }
     }
     if (!is_authorized($qid)) {
+      require_once 'navbar.inc.php';
         ?>
         <div class="container py-5">
           <div class="card mx-auto" style="max-width:400px">
