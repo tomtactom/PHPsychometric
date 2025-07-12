@@ -2,6 +2,56 @@
 ob_start();
 require_once __DIR__ . '/include.inc.php';
 
+// --- Login-Schutz für Bearbeitung ---
+$qid = isset($_GET['id']) && ctype_digit($_GET['id']) ? intval($_GET['id']) : null;
+if ($qid !== null) {
+    // Versuch einer Login-Einreichung?
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['access_password'])) {
+        $pw = trim($_POST['access_password']);
+        if (verify_admin($pw)) {
+            authorize($qid, true);
+        } elseif (verify_author($pdo, $qid, $pw)) {
+            authorize($qid);
+        } else {
+            $loginError = "Ungültiges Passwort.";
+        }
+    }
+    if (!is_authorized($qid)) {
+        ?>
+        <!doctype html>
+        <html lang="de">
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width,initial-scale=1">
+            <title>Login erforderlich</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+        </head>
+        <body>
+        <div class="container py-5">
+          <div class="card mx-auto" style="max-width:400px">
+            <div class="card-body">
+              <h5 class="card-title">Nur für Autoren/Admins</h5>
+              <?php if (!empty($loginError)): ?>
+                <div class="alert alert-danger"><?= htmlspecialchars($loginError) ?></div>
+              <?php endif; ?>
+              <form method="post" autocomplete="off">
+                <div class="mb-3">
+                  <label class="form-label">Passwort</label>
+                  <input type="password" name="access_password" class="form-control" required minlength="8">
+                  <div class="form-text">Mindestens 8 Zeichen.</div>
+                </div>
+                <button class="btn btn-primary w-100">Anmelden</button>
+              </form>
+            </div>
+          </div>
+        </div>
+        </body>
+        </html>
+        <?php
+        exit;
+    }
+}
+
 // --- Sprachoptionen ---
 $langs = [
     'DE'=>'Deutsch','EN'=>'Englisch','FR'=>'Französisch','IT'=>'Italienisch',
@@ -23,7 +73,6 @@ $choice_types = [
 
 // Initialisierung
 $editing       = false;
-$qid           = isset($_GET['id']) && ctype_digit($_GET['id']) ? intval($_GET['id']) : null;
 $questionnaire = null;
 $items         = [];
 $has_results   = false;
@@ -55,6 +104,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $choice_type = isset($_POST['choice_type']) ? intval($_POST['choice_type']) : null;
     $copyright   = isset($_POST['copyright']);
 
+    // Autor-Passwort
+    $author_hash = null;
+    if (isset($_POST['author_password']) && $_POST['author_password'] !== '') {
+        $plain = trim($_POST['author_password']);
+        if (strlen($plain) < 8) {
+            $errors[] = "Autor-Passwort muss mindestens 8 Zeichen lang sein.";
+        } else {
+            $author_hash = password_hash($plain, PASSWORD_DEFAULT);
+        }
+    } elseif ($editing && $has_results && !empty($_SESSION['auth_questionnaires'][$qid]) && empty($_SESSION['is_admin'])) {
+        // Nicht-Admin darf bestehendes Passwort nicht entfernen
+        $author_hash = $questionnaire['author_password_hash'];
+    }
+
     // Item-Felder
     $texts      = $_POST['item']    ?? [];
     $scales     = $_POST['scale']   ?? [];
@@ -68,6 +131,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!isset($langs[$language]))          $errors[] = "Bitte eine gültige Sprache wählen.";
     if (!isset($choice_types[$choice_type]))$errors[] = "Bitte einen gültigen Skalentyp wählen.";
     if (!$copyright)    $errors[] = "Bitte das Copyright bestätigen.";
+    if ($editing === false && $author_hash === null) {
+        $errors[] = "Bitte Autor-Passwort setzen.";
+    }
 
     // Items aufbauen und validieren
     $clean_items = [];
@@ -95,29 +161,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($errors)) {
         if ($editing && $questionnaire) {
             if ($has_results) {
-                // Nur Metadaten updaten
+                // Update nur Meta & Passwort
                 $upd = $pdo->prepare("
                     UPDATE questionnaires
-                       SET name=?, short=?, language=?, description=?, updated_at=NOW()
+                       SET name=?, short=?, language=?, description=?,
+                           author_password_hash=?, updated_at=NOW()
                      WHERE id=?
                 ");
-                $upd->execute([$name, $short, $language, $description, $qid]);
-                $feedback = [
-                    'type'=>'success',
-                    'msg'=>"Metadaten aktualisiert.<br>Items können nicht geändert werden (Ergebnisse vorhanden)."
-                ];
+                $upd->execute([
+                    $name, $short, $language, $description,
+                    $author_hash, $qid
+                ]);
+                $feedback = ['type'=>'success','msg'=>"Metadaten aktualisiert."];
             } else {
-                // Metadaten + Items
+                // Komplettes Update
                 $upd = $pdo->prepare("
                     UPDATE questionnaires
-                       SET name=?, short=?, language=?, choice_type=?, description=?, updated_at=NOW()
+                       SET name=?, short=?, language=?, choice_type=?, description=?,
+                           author_password_hash=?, updated_at=NOW()
                      WHERE id=?
                 ");
-                $upd->execute([$name, $short, $language, $choice_type, $description, $qid]);
-                // Alte Items löschen
+                $upd->execute([
+                    $name, $short, $language, $choice_type, $description,
+                    $author_hash, $qid
+                ]);
                 $pdo->prepare("DELETE FROM items WHERE questionnaire_id=?")
                     ->execute([$qid]);
-                // Neue Items einfügen
                 $ins = $pdo->prepare("
                     INSERT INTO items
                       (questionnaire_id,item,negated,scale,created_at,updated_at)
@@ -129,15 +198,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $feedback = ['type'=>'success','msg'=>"Fragebogen und Items aktualisiert."];
             }
         } else {
-            // Neu anlegen
+            // Neues Anlegen
             $ins = $pdo->prepare("
                 INSERT INTO questionnaires
-                  (name,short,language,choice_type,description,created_at,updated_at)
-                VALUES (?,?,?,?,?,NOW(),NOW())
+                  (name,short,language,choice_type,author_password_hash,description,created_at,updated_at)
+                VALUES (?,?,?,?,?,?,NOW(),NOW())
             ");
-            $ins->execute([$name, $short, $language, $choice_type, $description]);
+            $ins->execute([
+                $name, $short, $language, $choice_type,
+                $author_hash, $description
+            ]);
             $new_qid = $pdo->lastInsertId();
-            // Items anfügen
             $ins2 = $pdo->prepare("
                 INSERT INTO items
                   (questionnaire_id,item,negated,scale,created_at,updated_at)
@@ -147,13 +218,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $ins2->execute([$new_qid, $it['text'], $it['negated'], $it['scale']]);
             }
             $feedback = ['type'=>'success','msg'=>"Fragebogen erstellt."];
-            // Reset form state
             $editing = false;
             $questionnaire = null;
             $items = [];
         }
-        // Reload Items nach Update
-        if ($editing && $questionnaire) {
+        // Neu laden
+        if ($editing) {
             $stmt = $pdo->prepare("SELECT * FROM items WHERE questionnaire_id=? ORDER BY id ASC");
             $stmt->execute([$qid]);
             $items = $stmt->fetchAll();
@@ -163,7 +233,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Mindestens eine Zeile
+// Mindestens eine leere Zeile
 if (empty($items)) {
     $items = [['text'=>'','scale'=>'','negated'=>0]];
 }
@@ -190,63 +260,68 @@ if (empty($items)) {
   <?php endif; ?>
 
   <form method="post" id="questionnaireForm" autocomplete="off">
-    <!-- Metadaten -->
     <div class="card mb-4"><div class="card-body">
       <div class="row mb-3">
         <div class="col-md-7 mb-3 mb-md-0">
           <label class="form-label">Name *</label>
           <input name="name" class="form-control" required maxlength="255"
-                 value="<?= htmlspecialchars($questionnaire['name'] ?? $_POST['name'] ?? '') ?>"
-                 <?= $has_results ? 'readonly' : '' ?>>
+                 value="<?= htmlspecialchars($questionnaire['name'] ?? '') ?>">
         </div>
         <div class="col-md-5">
           <label class="form-label">Kürzel (optional)</label>
           <input name="short" class="form-control" maxlength="50"
-                 value="<?= htmlspecialchars($questionnaire['short'] ?? $_POST['short'] ?? '') ?>"
-                 <?= $has_results ? 'readonly' : '' ?>>
+                 value="<?= htmlspecialchars($questionnaire['short'] ?? '') ?>">
         </div>
       </div>
       <div class="row mb-3">
         <div class="col-md-6 mb-3 mb-md-0">
           <label class="form-label">Sprache *</label>
-          <select name="language" class="form-select" required <?= $has_results ? 'disabled' : '' ?>>
+          <select name="language" class="form-select" required>
             <option value="">Bitte wählen</option>
             <?php foreach ($langs as $code => $lang): ?>
-              <option value="<?= $code ?>" <?= (($questionnaire['language'] ?? $_POST['language'] ?? '') === $code) ? 'selected' : '' ?>>
+              <option value="<?= $code ?>" <?= (($questionnaire['language'] ?? '') === $code) ? 'selected' : '' ?>>
                 <?= $lang ?> (<?= $code ?>)
               </option>
             <?php endforeach; ?>
           </select>
-          <?php if ($has_results): ?>
-            <input type="hidden" name="language" value="<?= htmlspecialchars($questionnaire['language']) ?>">
-          <?php endif; ?>
         </div>
         <div class="col-md-6">
           <label class="form-label">Skalentyp *</label>
-          <select name="choice_type" class="form-select" required <?= $has_results ? 'disabled' : '' ?>>
+          <select name="choice_type" class="form-select" required>
             <option value="">Bitte wählen</option>
             <?php foreach ($choice_types as $val => $txt): ?>
-              <option value="<?= $val ?>" <?= ((($questionnaire['choice_type'] ?? $_POST['choice_type'] ?? '') == $val) ? 'selected' : '') ?>>
+              <option value="<?= $val ?>" <?= ((($questionnaire['choice_type'] ?? '') == $val) ? 'selected' : '') ?>>
                 <?= $txt ?>
               </option>
             <?php endforeach; ?>
           </select>
-          <?php if ($has_results): ?>
-            <input type="hidden" name="choice_type" value="<?= intval($questionnaire['choice_type']) ?>">
-          <?php endif; ?>
         </div>
       </div>
       <div class="mb-3">
         <label class="form-label">Beschreibung *</label>
-        <textarea name="description" class="form-control" required rows="2"><?= htmlspecialchars($questionnaire['description'] ?? $_POST['description'] ?? '') ?></textarea>
+        <textarea name="description" class="form-control" required rows="2"><?= htmlspecialchars($questionnaire['description'] ?? '') ?></textarea>
+      </div>
+
+      <?php if (!$has_results || !empty($_SESSION['is_admin'])): ?>
+      <div class="mb-3">
+        <label class="form-label"><?= $editing ? "Autor-Passwort ändern" : "Autor-Passwort" ?> <small>(min. 8 Zeichen)</small></label>
+        <input type="password" name="author_password" class="form-control" <?= $editing ? '' : 'required' ?> minlength="8">
+        <?php if ($editing && $questionnaire['author_password_hash']): ?>
+          <div class="form-text">Leer lassen, um es nicht zu ändern.</div>
+        <?php endif; ?>
+      </div>
+      <?php endif; ?>
+
+      <div class="form-check mb-3">
+        <input name="copyright" class="form-check-input" type="checkbox" required>
+        <label class="form-check-label">Ich bestätige, dass ich der Eigentümer bin.</label>
       </div>
     </div></div>
 
-    <!-- Items -->
     <div class="card mb-4"><div class="card-body">
       <label class="form-label mb-2">Items *</label>
       <?php if ($has_results): ?>
-        <div class="alert alert-info">Items können nicht geändert werden, da bereits Ergebnisse vorliegen.</div>
+        <div class="alert alert-info">Items gesperrt (Ergebnisse vorhanden).</div>
       <?php endif; ?>
       <div id="itemsList">
         <?php foreach ($items as $i => $it): ?>
@@ -269,13 +344,6 @@ if (empty($items)) {
       <?php endif; ?>
       <div class="mt-3 text-muted small" id="itemStats"></div>
     </div></div>
-
-    <div class="form-check mb-3">
-      <input name="copyright" class="form-check-input" type="checkbox" required>
-      <label class="form-check-label">
-        Ich bestätige, dass ich der Eigentümer dieses Fragebogens bin und alle Rechte am Inhalt besitze.
-      </label>
-    </div>
 
     <button type="submit" class="btn btn-success"><?= $editing ? "Speichern" : "Fragebogen erstellen" ?></button>
     <a href="edit_questionnaire.php" class="btn btn-link">Neuen Fragebogen anlegen</a>
