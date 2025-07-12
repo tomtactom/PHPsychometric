@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <title><?= htmlspecialchars(SITE_TITLE . ' – ' . ($pageTitle ?? 'Startseite')) ?></title>
+  <title><?= htmlspecialchars(($pageTitle ?? 'Startseite').' - '.SITE_TITLE) ?></title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <!-- Grundlegende Meta-Tags -->

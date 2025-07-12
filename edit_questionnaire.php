@@ -1,6 +1,9 @@
 <?php
 ob_start();
-require_once __DIR__ . '/include.inc.php';
+require_once 'include.inc.php';
+$pageTitle       = 'Übersicht';
+$pageDescription = 'Du möchtest Fragen stellen? Du möchtest Fragen beantworten? PHPsychometric macht\'s möglich!';
+require_once 'navbar.inc.php';
 
 // --- Login-Schutz für Bearbeitung ---
 $qid = isset($_GET['id']) && ctype_digit($_GET['id']) ? intval($_GET['id']) : null;
@@ -17,10 +20,6 @@ if ($qid !== null) {
     }
     if (!is_authorized($qid)) {
         ?>
-        <!doctype html>
-        <html lang="de"><head><meta charset="utf-8"><title>Login erforderlich</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-        </head><body>
         <div class="container py-5">
           <div class="card mx-auto" style="max-width:400px">
             <div class="card-body">

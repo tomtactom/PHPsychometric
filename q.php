@@ -1,5 +1,8 @@
 <?php
 require_once 'include.inc.php';
+$pageTitle       = 'Übersicht';
+$pageDescription = 'Du möchtest Fragen stellen? Du möchtest Fragen beantworten? PHPsychometric macht\'s möglich!';
+require_once 'navbar.inc.php';
 
 // Hilfsfunktion: Gibt user_id aus Cookie oder false zurück
 function getUserIdFromCookie() {
@@ -78,15 +81,7 @@ if (!$user) {
     }
     // Formular anzeigen und beenden
     ?>
-    <!doctype html>
-    <html lang="de">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Profil anlegen</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    </head>
-    <body>
+
     <div class="container my-5">
         <div class="card mx-auto shadow" style="max-width: 480px;">
             <div class="card-body">
