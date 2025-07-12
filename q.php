@@ -2,7 +2,6 @@
 require_once 'include.inc.php';
 $pageTitle       = 'Übersicht';
 $pageDescription = 'Du möchtest Fragen stellen? Du möchtest Fragen beantworten? PHPsychometric macht\'s möglich!';
-require_once 'navbar.inc.php';
 
 // Hilfsfunktion: Gibt user_id aus Cookie oder false zurück
 function getUserIdFromCookie() {
@@ -80,6 +79,7 @@ if (!$user) {
         }
     }
     // Formular anzeigen und beenden
+    require_once 'navbar.inc.php';
     ?>
 
     <div class="container my-5">
@@ -302,6 +302,7 @@ function renderItemInput($item, $name, $choicetype) {
             return '<input type="text" class="form-control" name="'.$name.'" required>';
     }
 }
+require_once 'navbar.inc.php';
 ?>
 <div class="container my-4" style="max-width:900px;">
     <h3 class="mb-3"><?= htmlspecialchars($fragebogen['name']) ?></h3>

@@ -3,7 +3,6 @@ ob_start();
 require_once 'include.inc.php';
 $pageTitle       = 'Übersicht';
 $pageDescription = 'Du möchtest Fragen stellen? Du möchtest Fragen beantworten? PHPsychometric macht\'s möglich!';
-require_once 'navbar.inc.php';
 
 // --- Login-Schutz für Bearbeitung ---
 $qid = isset($_GET['id']) && ctype_digit($_GET['id']) ? intval($_GET['id']) : null;
@@ -207,6 +206,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['name'])) {
 if (empty($items)) {
     $items = [['text'=>'','scale'=>'','negated'=>0]];
 }
+
+require_once 'navbar.inc.php';
 ?>
 <!doctype html>
 <html lang="de">
