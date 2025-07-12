@@ -54,7 +54,8 @@
     "@context": "https://schema.org",
     "@type": "WebApplication",
     "name": "PHPsychometric",
-    "url": "<?= htmlspecialchars(BASE_URL) ?>",
+    "url": "<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http')
+             . '://' . htmlspecialchars($_SERVER['HTTP_HOST']) ?>",
     "applicationCategory": "ProductivityApplication",
     "operatingSystem": "All",
     "description": "Online psychometrische Fragebögen erstellen, beantworten und auswerten."
