@@ -400,5 +400,5 @@ document.addEventListener('DOMContentLoaded', () => {
   updateItemStats();
 });
 </script>
-</body>
-</html>
+
+<?php include('footer.inc.php'); ?>

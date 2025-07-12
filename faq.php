@@ -149,5 +149,4 @@ require_once 'navbar.inc.php';
   </div>
 </div>
 
-</body>
-</html>
+<?php include('footer.inc.php'); ?>

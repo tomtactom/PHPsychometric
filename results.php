@@ -1,5 +1,8 @@
 <?php
 require_once 'include.inc.php';
+$pageTitle       = 'Ergebnisse';
+$pageDescription = 'Hier erfährst du die Ergebnisse von dem Fragebogen den du ausgefüllt hast.';
+require_once 'navbar.inc.php';
 
 // Kleine Statistik-Schwellen
 define('NORM_THRESHOLD', 30);
@@ -238,5 +241,4 @@ $shareText = rawurlencode(
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+<?php include('footer.inc.php'); ?>
