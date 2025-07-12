@@ -8,4 +8,11 @@ define('DB_PASS', 'deinpasswort');
 // Admin-Passwort (hashed). Erzeuge deinen Hash z.B. so:
 //   php -r "echo password_hash('start', PASSWORD_DEFAULT);"
 define('ADMIN_PASSWORD_HASH', '$2a$12$cGogSWwkeR.fBWWAYE.XN.3jnMKZKmGoB5wafkDw/zBZWAAEzC7S6'); # PW: start
+$company_name = "";
+$owner_name = "";
+$contact_email = "";
+$contact_phone = "";
+$contact_address = "";
+$vat_id = "";
+$tax_id = "";
 ?>
