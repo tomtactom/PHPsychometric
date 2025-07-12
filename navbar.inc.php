@@ -84,7 +84,7 @@
         <li class="nav-item">
           <a class="nav-link <?= ($activePage==='create'?'active':'') ?>" href="edit_questionnaire.php">Fragebogen erstellen</a>
         </li>
-        <li class="nav-item d-none d-lg-inline">
+        <li class="nav-item">
           <a class="nav-link <?= ($activePage==='faq'?'active':'') ?>" href="faq.php">FAQ</a>
         </li>
       </ul>
