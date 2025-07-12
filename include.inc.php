@@ -1,25 +1,8 @@
 <?php
-declare(strict_types=1);
+// include.inc.php
+// Globale Settings, sichere Initialisierung, DB-Autoinit
 
-// === Ganz oben: Output-Buffering starten, bevor irgendetwas ausgegeben wird ===
-ob_start();
-
-// === Sichere Session-Initialisierung (muss VOR JEDEM Output passieren) ===
-if (session_status() === PHP_SESSION_NONE) {
-    session_set_cookie_params([
-        'lifetime' => 0,
-        'path'     => '/',
-        'domain'   => $_SERVER['HTTP_HOST'],
-        'secure'   => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
-        'httponly' => true,
-        'samesite' => 'Lax'
-    ]);
-    session_start();
-}
-
-// === Kein Whitespace oder BOM vor dieser Datei! ===
-
-// 1. Private Konfiguration (DB-Zugangsdaten, keine Ausgaben darin!)
+// 1. Zugangsdaten privat halten
 $private_config_file = __DIR__ . '/config.private.php';
 if (!file_exists($private_config_file)) {
     http_response_code(500);
@@ -28,77 +11,105 @@ if (!file_exists($private_config_file)) {
 }
 require_once $private_config_file;
 
-// 2. Zeitzone und Encoding
+// 2. Sichere Session-Initialisierung (HTTP-Only, Secure, SameSite)
+if (session_status() === PHP_SESSION_NONE) {
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path' => '/',
+        'domain' => '', // Default: aktueller Host
+        'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
+    session_start();
+}
+
+// 3. Zeitzone und Encoding
 date_default_timezone_set('Europe/Berlin');
 mb_internal_encoding('UTF-8');
 
-// 3. Fehleranzeige nach Umgebung
+// 4. Fehleranzeige nach Umgebung (DEV/PROD)
 $devMode = (getenv('APP_ENV') === 'dev');
-ini_set('display_errors',        $devMode ? '1' : '0');
+ini_set('display_errors', $devMode ? '1' : '0');
 ini_set('display_startup_errors', $devMode ? '1' : '0');
 error_reporting($devMode ? E_ALL : 0);
 
-// 4. Security-Header (sofern noch nicht gesendet)
-if (!headers_sent()) {
-    header('X-Frame-Options: SAMEORIGIN');
-    header('X-Content-Type-Options: nosniff');
-}
+// 5. HTTP-Header für Security (Clickjacking, XSS, etc.)
+header('X-Frame-Options: SAMEORIGIN');
+header('X-Content-Type-Options: nosniff');
 
-// 5. PDO-Verbindung
+// 6. PDO-Verbindung mit robustem Fehler-Handling
 try {
-    $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4';
-    $pdo = new PDO($dsn, DB_USER, DB_PASS, [
-        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES   => false,
-    ]);
+    $pdo = new PDO(
+        'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4',
+        DB_USER,
+        DB_PASS,
+        [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false
+        ]
+    );
 } catch (PDOException $e) {
     http_response_code(500);
     if ($devMode) {
-        echo '<h1>DB-Verbindungsfehler</h1><pre>' . htmlspecialchars($e->getMessage()) . '</pre>';
+        echo '<b>Fehler bei der Datenbankverbindung:</b> ' . htmlspecialchars($e->getMessage());
     } else {
         echo 'Technisches Problem. Bitte später erneut versuchen.';
     }
     exit;
 }
 
-// 6. DB-Autoinit
-(function(PDO $pdo){
+// 7. Automatische Initialisierung der DB (falls noch nicht vorhanden)
+function initialize_database_if_needed(PDO $pdo, $initFile = 'db.sql') {
+    // Prüfen, ob die zentrale Tabelle existiert (hier: questionnaires)
+    $exists = false;
     try {
         $res = $pdo->query("SHOW TABLES LIKE 'questionnaires'");
-        $exists = (bool)$res && $res->fetch();
-    } catch (PDOException $e) {
-        $exists = false;
-    }
+        $exists = $res && $res->fetch();
+    } catch (PDOException $e) { /* Ignorieren */ }
+
     if (!$exists) {
-        $path = __DIR__ . '/db.sql';
+        $path = __DIR__ . '/' . $initFile;
         if (!is_readable($path)) {
             http_response_code(500);
-            echo 'DB nicht initialisiert – db.sql fehlt.';
+            echo "Datenbank nicht initialisiert – und db.sql fehlt!";
             exit;
         }
         $sql = file_get_contents($path);
-        $stmts = array_filter(array_map('trim', explode(';', $sql)));
+
+        // Statements grob trennen (für die meisten SQL-Files ausreichend)
+        $statements = array_filter(array_map('trim', explode(';', $sql)));
+
         try {
-            foreach ($stmts as $stmt) {
+            foreach ($statements as $stmt) {
                 if ($stmt !== '') $pdo->exec($stmt);
             }
+            // Optional: Erfolgshinweis einmalig anzeigen
             if (!headers_sent()) {
-                header('Location: ' . $_SERVER['REQUEST_URI']);
+                header("Refresh:0"); // Seite neu laden, damit DB-Struktur erkannt wird
             }
             exit;
         } catch (PDOException $e) {
             http_response_code(500);
-            echo '<h1>Initialisierungsfehler</h1><pre>'
-                 . htmlspecialchars($e->getMessage()) . '</pre>';
+            echo "<b>Fehler bei der Initialisierung:</b><br><pre>" . htmlspecialchars($e->getMessage()) . "</pre>";
             exit;
         }
     }
-})($pdo);
-
-// 7. Site-Title
-if (!defined('SITE_TITLE')) {
-    define('SITE_TITLE', '📝 Online-Fragebögen');
 }
+initialize_database_if_needed($pdo);
 
-// Ab hier dein Anwendungscode – **keine** Leerzeile oder `?>`!
+// 8. Globale UX-Einstellung
+if (!defined('SITE_TITLE')) define('SITE_TITLE', '📝 Online-Fragebögen');
+
+// 9. (Optional) HTTPS erzwingen
+// if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+//     // HTTPS aktiv
+// } else if (!empty($_SERVER['HTTP_HOST'])) {
+//     // Optional: Automatische Umleitung auf HTTPS
+//     // header('Location: https://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'], true, 301);
+//     // exit;
+// }
+
+// --- Ende der Initialisierung ---
+?>
