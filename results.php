@@ -1,5 +1,22 @@
 <?php
+// Debugging aktivieren
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 require_once 'include.inc.php';
+
+// Debug-Ausgabe-Hilfsfunktion
+function debug_out($msg, $data = null) {
+    echo "<div style='background:#fee;border:1px solid #f99; color:#900; font-size:13px; padding:7px 14px; margin:10px 0; border-radius:5px;'>";
+    echo "<strong>DEBUG:</strong> $msg";
+    if ($data !== null) {
+        echo "<pre style='margin:0; padding:0 0 0 16px; font-size:12px; color:#900;'>";
+        print_r($data);
+        echo "</pre>";
+    }
+    echo "</div>";
+}
 
 // Nutzer-Identifikation per Cookie
 function getUserIdFromCookie() {
@@ -13,6 +30,7 @@ function getUserIdFromCookie() {
 $qid = isset($_GET['id']) && ctype_digit($_GET['id']) ? intval($_GET['id']) : null;
 if (!$qid) {
     http_response_code(400);
+    debug_out("Kein oder ungültiger Fragebogen (qid)", $_GET);
     die('<div class="alert alert-danger m-5">Ungültige Anfrage.</div>');
 }
 
@@ -22,22 +40,28 @@ $stmt->execute([$qid]);
 $fragebogen = $stmt->fetch();
 if (!$fragebogen) {
     http_response_code(404);
+    debug_out("Fragebogen nicht gefunden", $qid);
     die('<div class="alert alert-danger m-5">Fragebogen nicht gefunden.</div>');
 }
 
 // Nutzer prüfen
 $user_id = getUserIdFromCookie();
 if (!$user_id) {
+    debug_out("Kein User-Cookie gefunden oder ungültig", $_COOKIE);
     header("Location: q.php?id=$qid");
     exit;
 }
 
-// 1. Welche Items gehören zum Fragebogen? (z.B. für Vollständigkeits-Check)
+// Items des Fragebogens holen (z.B. für Vollständigkeits-Check)
 $stmt = $pdo->prepare("SELECT id FROM items WHERE questionnaire_id = ? ORDER BY id ASC");
 $stmt->execute([$qid]);
 $item_ids = array_column($stmt->fetchAll(), 'id');
+if (!$item_ids) {
+    debug_out("Keine Items für diesen Fragebogen gefunden.", $qid);
+    die('<div class="alert alert-danger m-5">Für diesen Fragebogen sind keine Items definiert.</div>');
+}
 
-// 2. Alle Durchgänge (Teilnahmen) dieses Nutzers holen (nach Abgabezeit sortiert)
+// Alle Durchgänge dieses Nutzers holen (sortiert)
 $stmt = $pdo->prepare("SELECT r.*, i.choicetype, i.negated, i.scale, i.item
     FROM results r
     JOIN items i ON r.item_id = i.id
@@ -46,7 +70,16 @@ $stmt = $pdo->prepare("SELECT r.*, i.choicetype, i.negated, i.scale, i.item
 $stmt->execute([$user_id, $qid]);
 $all_responses = $stmt->fetchAll();
 
-// 3. Durchgänge rekonstruieren: Antworten werden jeweils pro Durchgang (= eine Antwort je Item) gruppiert
+if (!$all_responses) {
+    debug_out("Keine Antworten in results gefunden", ['user_id'=>$user_id, 'questionnaire_id'=>$qid]);
+    header("Location: q.php?id=$qid");
+    exit;
+}
+
+// Debug-Ausgabe: Rohdaten zeigen
+debug_out("Alle gefundenen Antworten (all_responses):", $all_responses);
+
+// Durchgänge rekonstruieren: Antworten je Durchgang (= eine Antwort je Item) gruppieren
 $runs = [];
 $curr_run = [];
 $curr_ids = [];
@@ -60,17 +93,38 @@ foreach ($all_responses as $row) {
         $curr_ids = [];
     }
 }
-// Aktuell nehmen wir den letzten vollständigen Durchgang (neuester)
+debug_out("Rekonstruierte Durchgänge (runs):", $runs);
+
+// Versuchen, den letzten vollständigen Durchgang zu nehmen
 $responses = end($runs) ?: [];
 
-// Keine Antworten gefunden?
+// Wenn kein Durchgang gefunden, evtl. „unvollständigen“ Satz probieren?
+if (!$responses && !empty($all_responses) && count($item_ids) > 0) {
+    // Wir nehmen die letzten N Antworten aus $all_responses, falls alle verschiedenen Items
+    $try = array_slice($all_responses, -count($item_ids));
+    $test_ids = array_column($try, 'item_id');
+    if (count($try) == count($item_ids) && count(array_unique($test_ids)) == count($item_ids)) {
+        debug_out("Nur ein „unvollständiger“ Durchgang erkannt – nehme letzten Satz an Antworten.", $try);
+        $responses = $try;
+    }
+}
+
+// Immer noch keine Antworten?
 if (!$responses) {
+    debug_out("Keine vollständigen Durchgänge gefunden.", [
+        'user_id'=>$user_id,
+        'questionnaire_id'=>$qid,
+        'item_ids'=>$item_ids,
+        'all_responses'=>$all_responses
+    ]);
     header("Location: q.php?id=$qid");
     exit;
 }
 
+// Debug-Ausgabe: Der gewertete Antwortsatz
+debug_out("Zur Auswertung verwendeter Antwortsatz:", $responses);
+
 // Skalen-Zusammenstellung: Map [scale_name] => [Items...]
-// Wenn keine scale vergeben ist, dann kommt alles zu '_gesamt'
 $skala_map = [];
 foreach ($responses as $row) {
     $scale = $row['scale'] ?? '';
@@ -78,7 +132,6 @@ foreach ($responses as $row) {
     if (!isset($skala_map[$scale])) $skala_map[$scale] = [];
     $skala_map[$scale][] = $row;
 }
-// Für den gesamten Fragebogen (alle Antworten), falls nicht schon unter _gesamt zusammengefasst
 if (!isset($skala_map['_gesamt'])) {
     $skala_map['_gesamt'] = $responses;
 }
@@ -87,18 +140,16 @@ if (!isset($skala_map['_gesamt'])) {
 function isLikert($choicetype) {
     return in_array(intval($choicetype), [3,4,5,6,7]);
 }
-// Hilfsfunktion: Skalentyp als "summiert" (typ 1,2)
 function isSummiert($choicetype) {
     return in_array(intval($choicetype), [1,2]);
 }
-// Theoretischer Min/Max Wert berechnen
 function minMaxForSkala($items) {
     $min = 0;
     $max = 0;
     foreach ($items as $item) {
         $ct = intval($item['choicetype']);
         if (isLikert($ct)) {
-            $max += $ct;   // z.B. type 5 = Werte 0-5
+            $max += $ct;
         } elseif ($ct == 0) {
             $max += 100;
         } else {
@@ -107,7 +158,6 @@ function minMaxForSkala($items) {
     }
     return [$min, $max];
 }
-// Wert für die Skala berechnen
 function calcWertForSkala($items) {
     $sum = 0;
     foreach ($items as $item) {
@@ -132,14 +182,11 @@ function calcWertForSkala($items) {
     }
     return $sum;
 }
-// Maximum eines Items für Progressbar (Likert: z.B. 5, Slider: 100, sonst 1)
 function getItemMax($ct) {
     if (isLikert($ct)) return $ct;
     if ($ct == 0) return 100;
     return 1;
 }
-
-// Farben für Progressbar (nach prozentualer Ausprägung)
 function getBarClass($percent) {
     if ($percent < 0.33) return 'bg-danger';
     if ($percent < 0.66) return 'bg-warning';
@@ -176,14 +223,16 @@ function getBarClass($percent) {
     </div>
     <?php
     foreach ($skala_map as $skala_name => $skala_items):
-        if (empty($skala_items) || !isset($skala_items[0]['choicetype'])) continue;
+        if (empty($skala_items) || !isset($skala_items[0]['choicetype'])) {
+            debug_out("Überspringe leeren oder fehlerhaften Skalenblock", ['skala'=>$skala_name, 'skala_items'=>$skala_items]);
+            continue;
+        }
         list($min, $max) = minMaxForSkala($skala_items);
         $sum = calcWertForSkala($skala_items);
         $percent = $max > $min ? ($sum-$min)/($max-$min) : 1.0;
         $barclass = getBarClass($percent);
         $label = ($skala_name === '_gesamt') ? 'Gesamtergebnis' : htmlspecialchars($skala_name);
 
-        // Durchschnitt bei Likert/Slider, sonst Summenwert
         $ct = intval($skala_items[0]['choicetype']);
         $anzeige = '';
         if (isLikert($ct) || $ct == 0) {
