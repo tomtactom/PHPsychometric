@@ -259,6 +259,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['questionnaire_submit'
 
 // Hilfsfunktion: Skalen-HTML erzeugen (Likert, Slider, Dual, etc.)
 // Verwendet jetzt ausschließlich den choicetype des Fragebogens!
+// Für Likert: Nur die beiden Extreme beschriften, responsive!
 function renderItemInput($item, $name, $choicetype) {
     $type = intval($choicetype);
     switch ($type) {
@@ -288,20 +289,17 @@ function renderItemInput($item, $name, $choicetype) {
                 </div>
             ';
         case 3: case 4: case 5: case 6: case 7: // Likert-Skalen (3-7-stufig)
-            $labels = [
-                3 => ['Stimme gar nicht zu', 'Unentschieden', 'Stimme voll zu'],
-                4 => ['Stimme gar nicht zu', 'Stimme wenig zu', 'Stimme eher zu', 'Stimme voll zu'],
-                5 => ['Stimme gar nicht zu', 'Stimme wenig zu', 'Unentschieden', 'Stimme eher zu', 'Stimme voll zu'],
-                6 => ['Stimme gar nicht zu', 'Stimme wenig zu', 'Stimme teilweise zu', 'Stimme eher zu', 'Stimme stark zu', 'Stimme voll zu'],
-                7 => ['Stimme gar nicht zu', 'Stimme kaum zu', 'Stimme wenig zu', 'Unentschieden', 'Stimme eher zu', 'Stimme stark zu', 'Stimme voll zu'],
-            ];
             $count = $type + 1;
-            $options = $labels[$type] ?? [];
-            $out = '<div class="btn-group w-100" role="group">';
+            $labels = [
+                0 => 'Stimme gar nicht zu',
+                ($count-1) => 'Stimme voll zu'
+            ];
+            // Responsive Button-Gruppe (horizontal scrollbar auf kleinen Geräten)
+            $out = '<div class="btn-group w-100 d-flex flex-nowrap flex-sm-wrap overflow-auto" role="group" style="min-width:210px;">';
             for ($i=0; $i<$count; $i++) {
-                $label = $options[$i] ?? ($i+1);
-                $out .= '<input type="radio" class="btn-check" name="'.$name.'" id="'.$name.'_'.$i.'" value="'.$i.'" required>
-                        <label class="btn btn-outline-primary" for="'.$name.'_'.$i.'" style="font-size:0.9em;">'.$label.'</label>';
+                $label = $labels[$i] ?? '';
+                $out .= '<input type="radio" class="btn-check" name="'.$name.'" id="'.$name.'_'.$i.'" value="'.$i.'" required>';
+                $out .= '<label class="btn btn-outline-primary flex-fill px-1 px-sm-2" for="'.$name.'_'.$i.'" style="font-size:0.95em; min-width:38px;white-space:normal;">'.htmlspecialchars($label).'</label>';
             }
             $out .= '</div>';
             return $out;
@@ -320,6 +318,13 @@ function renderItemInput($item, $name, $choicetype) {
     <style>
         .frage-item { margin-bottom:2.5rem;}
         .frage-label { font-weight:500;}
+        @media (max-width: 600px) {
+            .btn-group label.btn {
+                font-size: 0.87em !important;
+                padding-left: 0.15rem !important;
+                padding-right: 0.15rem !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -335,10 +340,6 @@ function renderItemInput($item, $name, $choicetype) {
             <div class="frage-item">
                 <div class="frage-label mb-2"><?= nl2br(htmlspecialchars($item['item'])) ?></div>
                 <?= renderItemInput($item, 'item_'.$item['id'], $fragebogen['choice_type']) ?>
-                <?php // Skala nur bei Bedarf anzeigen; aktuell auskommentiert ?>
-                <?php /* if ($item['scale']): ?>
-                    <div class="form-text mt-1"><small>Skala: <?= htmlspecialchars($item['scale']) ?></small></div>
-                <?php endif; */ ?>
             </div>
         <?php endforeach; ?>
         <button type="submit" name="questionnaire_submit" class="btn btn-success px-4">Abschicken</button>
