@@ -1,43 +1,13 @@
 <?php
 require_once 'include.inc.php';
+$pageTitle       = 'Übersicht';
+$pageDescription = 'Du möchtest Fragen stellen? Du möchtest Fragen beantworten? PHPsychometric macht\'s möglich!';
+require_once 'navbar.inc.php';
 
 // Fragebögen abrufen
 $stmt = $pdo->query("SELECT id, name, short, language, description FROM questionnaires ORDER BY id ASC");
 $questionnaires = $stmt->fetchAll();
 ?>
-<!doctype html>
-<html lang="de">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Fragebögen Übersicht</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body {
-            background: #f8fafc;
-        }
-        .card {
-            transition: box-shadow 0.2s, transform 0.2s;
-        }
-        .card:hover {
-            box-shadow: 0 6px 24px rgba(0,0,0,0.10);
-            transform: translateY(-2px) scale(1.02);
-        }
-        .card-title {
-            font-size: 1.3rem;
-        }
-        .badge {
-            font-size: 0.85em;
-        }
-    </style>
-</head>
-<body>
-<nav class="navbar navbar-light bg-light mb-4">
-    <div class="container">
-        <span class="navbar-brand mb-0 h1">📝 Fragebögen</span>
-    </div>
-</nav>
-
 <div class="container">
     <h2 class="mb-4 text-center">Alle verfügbaren Fragebögen</h2>
     <div class="row g-4 justify-content-center">
