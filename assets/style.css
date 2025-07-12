@@ -167,3 +167,12 @@ body {
   padding: 0.75rem 1.5rem;
   border-radius: 2rem;
 }
+.frage-item { margin-bottom:2.5rem;}
+.frage-label { font-weight:500;}
+@media (max-width: 600px) {
+    .btn-group label.btn {
+        font-size: 0.87em !important;
+        padding-left: 0.15rem !important;
+        padding-right: 0.15rem !important;
+    }
+}
