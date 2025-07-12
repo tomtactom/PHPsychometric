@@ -14,3 +14,51 @@ body {
 .badge {
     font-size: 0.85em;
 }
+
+/* Hero Section */
+.hero {
+  background: linear-gradient(135deg, #2E5BDA 0%, #6383E0 100%);
+  color: #fff;
+  padding: 4rem 0;
+  text-align: center;
+  overflow: hidden;
+}
+.hero h1 { font-size: 3rem; font-weight: 700; }
+.hero p { font-size: 1.25rem; margin-top: 0.5rem; }
+.hero .btn-light { font-weight: 600; }
+
+/* Search Bar */
+.search-bar { max-width: 600px; margin: 2rem auto; }
+
+/* 3D-Tilt Cards */
+.card-tilt {
+  transform-style: preserve-3d;
+  transition: transform 0.4s ease;
+}
+.card-hover:hover .card-tilt {
+  transform: rotateY(10deg) rotateX(5deg) scale(1.03);
+}
+.card-hover { perspective: 1000px; }
+
+/* Card Front & Back */
+.card-body { position: relative; height: 100%; }
+.card-front, .card-back {
+  backface-visibility: hidden;
+  position: absolute; top: 0; left: 0;
+  width: 100%; height: 100%;
+  border-radius: .5rem;
+}
+.card-back {
+  transform: rotateY(180deg);
+  background: #f8f9fa;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+/* Ergebnis-Button */
+.result-btn {
+  position: absolute;
+  top: .75rem; right: .75rem;
+  font-size: .85rem;
+  padding: .25rem .5rem;
+}
