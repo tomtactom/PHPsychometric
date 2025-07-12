@@ -1,3 +1,4 @@
+```php
 <?php
 // === Debug-Modus einschalten (zum Entwickeln) ===
 ini_set('display_errors', 1);
@@ -39,7 +40,7 @@ if ($qid) {
     $stmt->execute([$qid]);
     $questionnaire = $stmt->fetch();
     if ($questionnaire) {
-        $editing     = true;
+        $editing   = true;
         // Items laden
         $stmt = $pdo->prepare("SELECT * FROM items WHERE questionnaire_id = ? ORDER BY id ASC");
         $stmt->execute([$qid]);
@@ -64,12 +65,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Item-Felder
     $texts      = $_POST['item']    ?? [];
     $scales     = $_POST['scale']   ?? [];
-    $negIndices = $_POST['negated'] ?? [];  // Liste von Zeilen-Indizes
+    // Indizes als int
+    $negIndices = isset($_POST['negated'])
+                  ? array_map('intval', $_POST['negated'])
+                  : [];
 
     $errors = [];
     if (!$name)        $errors[] = "Bitte einen Namen angeben.";
     if (!$description) $errors[] = "Bitte eine Beschreibung eingeben.";
-    if (!isset($langs[$language]))        $errors[] = "Bitte eine gültige Sprache wählen.";
+    if (!isset($langs[$language]))         $errors[] = "Bitte eine gültige Sprache wählen.";
     if (!isset($choice_types[$choice_type])) $errors[] = "Bitte einen gültigen Skalentyp wählen.";
     if (!$copyright)   $errors[] = "Bitte das Copyright bestätigen.";
 
@@ -95,10 +99,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = "Es sind doppelte Items vorhanden.";
     }
 
-    // Wenn alles valid, speichern
+    // Speichern
     if (empty($errors)) {
         if ($editing && $questionnaire) {
-            // BEARBEITEN
             if ($has_results) {
                 // Nur Metadaten updaten
                 $upd = $pdo->prepare(
@@ -106,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      SET name=?, short=?, language=?, description=?, updated_at=NOW()
                    WHERE id=?"
                 );
-                $upd->execute([$name,$short,$language,$description,$qid]);
+                $upd->execute([$name, $short, $language, $description, $qid]);
                 $feedback = [
                     'type'=>'success',
                     'msg'=>"Metadaten aktualisiert.<br>Items können nicht mehr geändert werden, da bereits Ergebnisse vorliegen."
@@ -118,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      SET name=?, short=?, language=?, choice_type=?, description=?, updated_at=NOW()
                    WHERE id=?"
                 );
-                $upd->execute([$name,$short,$language,$choice_type,$description,$qid]);
+                $upd->execute([$name, $short, $language, $choice_type, $description, $qid]);
                 // Alte Items löschen
                 $pdo->prepare("DELETE FROM items WHERE questionnaire_id=?")
                     ->execute([$qid]);
@@ -129,18 +132,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                    VALUES (?,?,?,?,NOW(),NOW())"
                 );
                 foreach ($clean_items as $it) {
-                    $ins->execute([$qid,$it['text'],$it['negated'],$it['scale']]);
+                    $ins->execute([$qid, $it['text'], $it['negated'], $it['scale']]);
                 }
                 $feedback = ['type'=>'success','msg'=>"Fragebogen und Items aktualisiert."];
             }
         } else {
-            // NEU ANLEGEN
+            // Neu anlegen
             $ins = $pdo->prepare(
               "INSERT INTO questionnaires
                  (name,short,language,choice_type,description,created_at,updated_at)
                VALUES (?,?,?,?,?,NOW(),NOW())"
             );
-            $ins->execute([$name,$short,$language,$choice_type,$description]);
+            $ins->execute([$name, $short, $language, $choice_type, $description]);
             $new_qid = $pdo->lastInsertId();
             // Items anfügen
             $ins2 = $pdo->prepare(
@@ -149,7 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                VALUES (?,?,?,?,NOW(),NOW())"
             );
             foreach ($clean_items as $it) {
-                $ins2->execute([$new_qid,$it['text'],$it['negated'],$it['scale']]);
+                $ins2->execute([$new_qid, $it['text'], $it['negated'], $it['scale']]);
             }
             $feedback = ['type'=>'success','msg'=>"Fragebogen erstellt."];
             // Reset form state
@@ -164,7 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $items = $stmt->fetchAll();
         }
     } else {
-        $feedback = ['type'=>'danger','msg'=>implode('<br>',$errors)];
+        $feedback = ['type'=>'danger','msg'=>implode('<br>', $errors)];
     }
 }
 
@@ -178,7 +181,7 @@ if (empty($items)) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title><?= $editing ? "Fragebogen bearbeiten" : "Fragebogen erstellen" ?></title>
+  <title><?= $editing ? "Fragebogen bearbeiten" : "Neuen Fragebogen erstellen" ?></title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
   <style>
@@ -277,7 +280,9 @@ if (empty($items)) {
 
     <div class="form-check mb-3">
       <input name="copyright" class="form-check-input" type="checkbox" required>
-      <label class="form-check-label">Ich bestätige, dass ich der Eigentümer dieses Fragebogens bin und alle Rechte am Inhalt besitze.</label>
+      <label class="form-check-label">
+        Ich bestätige, dass ich der Eigentümer dieses Fragebogens bin und alle Rechte am Inhalt besitze.
+      </label>
     </div>
 
     <button type="submit" class="btn btn-success"><?= $editing ? "Speichern" : "Fragebogen erstellen" ?></button>
@@ -288,9 +293,9 @@ if (empty($items)) {
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  const list = document.getElementById('itemsList');
+  const list   = document.getElementById('itemsList');
   const addBtn = document.getElementById('btnAddItem');
-  const stats = document.getElementById('itemStats');
+  const stats  = document.getElementById('itemStats');
 
   function updateItemStats() {
     const rows = list.querySelectorAll('.item-row');
@@ -300,8 +305,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (txt) count++;
       const sc = r.querySelector('input[name="scale[]"]').value.trim();
       if (sc) scales.add(sc);
-      // Setze Checkbox-Wert auf Index
-      r.querySelector('input[type="checkbox"]').value = i;
+      // Checkbox-Wert auf Index
+      const cb = r.querySelector('input[type="checkbox"]');
+      if (cb) cb.value = i;
     });
     let info = count + " Item" + (count !== 1 ? "s" : "");
     if (scales.size) {
@@ -348,3 +354,4 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 </body>
 </html>
+```
