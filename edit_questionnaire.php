@@ -209,21 +209,7 @@ if (empty($items)) {
 
 require_once 'navbar.inc.php';
 ?>
-<!doctype html>
-<html lang="de">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title><?= $editing ? "Fragebogen bearbeiten" : "Neuen Fragebogen erstellen" ?></title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
-  <style>
-    body { background:#f7f9fb; }
-    .card { box-shadow:0 6px 24px rgba(0,0,0,0.07); }
-    .form-check-input { margin-top:0.3em; }
-  </style>
-</head>
-<body>
+
 <div class="container py-4" style="max-width:900px;">
   <h2 class="mb-3"><?= $editing ? "Fragebogen bearbeiten" : "Neuen Fragebogen erstellen" ?></h2>
   <?php if (!empty($feedback)): ?>

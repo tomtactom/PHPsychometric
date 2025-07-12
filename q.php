@@ -302,7 +302,6 @@ function renderItemInput($item, $name, $choicetype) {
             return '<input type="text" class="form-control" name="'.$name.'" required>';
     }
 }
-require_once 'navbar.inc.php';
 ?>
 <div class="container my-4" style="max-width:900px;">
     <h3 class="mb-3"><?= htmlspecialchars($fragebogen['name']) ?></h3>
