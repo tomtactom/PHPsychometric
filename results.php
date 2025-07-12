@@ -32,14 +32,36 @@ if (!$user_id) {
     exit;
 }
 
-// Alle Antworten des Nutzers zu diesem Fragebogen abrufen
+// 1. Welche Items gehören zum Fragebogen? (z.B. für Vollständigkeits-Check)
+$stmt = $pdo->prepare("SELECT id FROM items WHERE questionnaire_id = ? ORDER BY id ASC");
+$stmt->execute([$qid]);
+$item_ids = array_column($stmt->fetchAll(), 'id');
+
+// 2. Alle Durchgänge (Teilnahmen) dieses Nutzers holen (nach Abgabezeit sortiert)
 $stmt = $pdo->prepare("SELECT r.*, i.choicetype, i.negated, i.scale, i.item
-                       FROM results r
-                       JOIN items i ON r.item_id = i.id
-                       WHERE r.user_id = ? AND r.questionnaire_id = ?
-                       ORDER BY i.id ASC");
+    FROM results r
+    JOIN items i ON r.item_id = i.id
+    WHERE r.user_id = ? AND r.questionnaire_id = ?
+    ORDER BY r.created_at ASC, r.id ASC");
 $stmt->execute([$user_id, $qid]);
-$responses = $stmt->fetchAll();
+$all_responses = $stmt->fetchAll();
+
+// 3. Durchgänge rekonstruieren: Antworten werden jeweils pro Durchgang (= eine Antwort je Item) gruppiert
+$runs = [];
+$curr_run = [];
+$curr_ids = [];
+foreach ($all_responses as $row) {
+    $curr_run[] = $row;
+    $curr_ids[] = $row['item_id'];
+    // Wenn alle Item-IDs einmal beisammen, ist ein vollständiger Durchgang erreicht
+    if (count($curr_run) == count($item_ids) && count(array_unique($curr_ids)) == count($item_ids)) {
+        $runs[] = $curr_run;
+        $curr_run = [];
+        $curr_ids = [];
+    }
+}
+// Aktuell nehmen wir den letzten vollständigen Durchgang (neuester)
+$responses = end($runs) ?: [];
 
 // Keine Antworten gefunden?
 if (!$responses) {
@@ -56,7 +78,6 @@ foreach ($responses as $row) {
     if (!isset($skala_map[$scale])) $skala_map[$scale] = [];
     $skala_map[$scale][] = $row;
 }
-
 // Für den gesamten Fragebogen (alle Antworten), falls nicht schon unter _gesamt zusammengefasst
 if (!isset($skala_map['_gesamt'])) {
     $skala_map['_gesamt'] = $responses;
@@ -72,20 +93,17 @@ function isSummiert($choicetype) {
 }
 // Theoretischer Min/Max Wert berechnen
 function minMaxForSkala($items) {
-    // Alle Items sind vom gleichen Typ; wir nehmen das erste als Referenz
     $min = 0;
     $max = 0;
     foreach ($items as $item) {
         $ct = intval($item['choicetype']);
         if (isLikert($ct)) {
-            // 3-stufig: Werte 0,1,2  --> Max=2
             $max += $ct;   // z.B. type 5 = Werte 0-5
         } elseif ($ct == 0) {
             $max += 100;
         } else {
             $max += 1;
         }
-        // min bleibt immer 0
     }
     return [$min, $max];
 }
@@ -94,7 +112,6 @@ function calcWertForSkala($items) {
     $sum = 0;
     foreach ($items as $item) {
         $val = $item['result'];
-        // Negierte Items: Wert invertieren (nur bei Likert und Summenwert)
         $ct = intval($item['choicetype']);
         if (isLikert($ct)) {
             if ($item['negated']) {
@@ -102,13 +119,11 @@ function calcWertForSkala($items) {
             }
             $sum += intval($val);
         } elseif ($ct == 0) {
-            // Intervallskala/Slider: Negation sinnvoll?
             if ($item['negated']) {
                 $val = 100 - intval($val);
             }
             $sum += intval($val);
         } else {
-            // Wahr/Falsch, Stimme zu/nicht zu, etc.
             if ($item['negated']) {
                 $val = intval($val) == 1 ? 0 : 1;
             }
@@ -161,11 +176,22 @@ function getBarClass($percent) {
     </div>
     <?php
     foreach ($skala_map as $skala_name => $skala_items):
+        if (empty($skala_items) || !isset($skala_items[0]['choicetype'])) continue;
         list($min, $max) = minMaxForSkala($skala_items);
         $sum = calcWertForSkala($skala_items);
         $percent = $max > $min ? ($sum-$min)/($max-$min) : 1.0;
         $barclass = getBarClass($percent);
         $label = ($skala_name === '_gesamt') ? 'Gesamtergebnis' : htmlspecialchars($skala_name);
+
+        // Durchschnitt bei Likert/Slider, sonst Summenwert
+        $ct = intval($skala_items[0]['choicetype']);
+        $anzeige = '';
+        if (isLikert($ct) || $ct == 0) {
+            $mw = count($skala_items) > 0 ? round($sum / count($skala_items), 2) : 0;
+            $anzeige = $mw . ' / ' . getItemMax($ct);
+        } else {
+            $anzeige = $sum . ' / ' . $max;
+        }
         ?>
         <div class="skala-block">
             <div class="scale-head mb-2"><?= $label ?></div>
@@ -173,14 +199,12 @@ function getBarClass($percent) {
                 <div class="progress-bar <?= $barclass ?>" role="progressbar"
                      style="width:<?= round($percent*100) ?>%;"
                      aria-valuenow="<?= $sum ?>" aria-valuemin="<?= $min ?>" aria-valuemax="<?= $max ?>">
-                    <?= isLikert($skala_items[0]['choicetype']) || $skala_items[0]['choicetype'] == 0
-                        ? round($sum / count($skala_items), 2) . ' / ' . getItemMax($skala_items[0]['choicetype'])
-                        : $sum . ' / ' . $max ?>
+                    <?= $anzeige ?>
                 </div>
             </div>
             <div class="subtext">
-                <?php if (isLikert($skala_items[0]['choicetype']) || $skala_items[0]['choicetype'] == 0): ?>
-                    Mittelwert aus <?= count($skala_items) ?> Item<?= count($skala_items) > 1 ? 's' : '' ?> (0 = minimal, <?= getItemMax($skala_items[0]['choicetype']) ?> = maximal)
+                <?php if (isLikert($ct) || $ct == 0): ?>
+                    Mittelwert aus <?= count($skala_items) ?> Item<?= count($skala_items) > 1 ? 's' : '' ?> (0 = minimal, <?= getItemMax($ct) ?> = maximal)
                 <?php else: ?>
                     Summenwert aus <?= count($skala_items) ?> Item<?= count($skala_items) > 1 ? 's' : '' ?> (0 = minimal, <?= $max ?> = maximal)
                 <?php endif; ?>
