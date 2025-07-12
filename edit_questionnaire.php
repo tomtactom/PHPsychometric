@@ -388,4 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 
-<?php include('footer.inc.php'); ?>
+<?php
+  include('footer.inc.php');
+  ob_end_flush();
+?>
