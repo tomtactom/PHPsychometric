@@ -1,11 +1,6 @@
-```php
 <?php
-// === Debug-Modus einschalten (zum Entwickeln) ===
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
-require_once 'include.inc.php';
+ob_start();
+require_once __DIR__ . '/include.inc.php';
 
 // --- Sprachoptionen ---
 $langs = [
@@ -16,7 +11,7 @@ $langs = [
 
 // --- ChoiceTypes ---
 $choice_types = [
-    0=>"Intervallskala (Schieberegler 0-100)",
+    0=>"Intervallskala (Schieberegler 0–100)",
     1=>"Dual: Wahr / Falsch",
     2=>"Dual: Stimme voll zu / Stimme nicht zu",
     3=>"3-stufige Likert-Skala",
@@ -41,11 +36,9 @@ if ($qid) {
     $questionnaire = $stmt->fetch();
     if ($questionnaire) {
         $editing   = true;
-        // Items laden
         $stmt = $pdo->prepare("SELECT * FROM items WHERE questionnaire_id = ? ORDER BY id ASC");
         $stmt->execute([$qid]);
         $items = $stmt->fetchAll();
-        // Prüfen ob es schon Ergebnisse gibt
         $stmt = $pdo->prepare("SELECT COUNT(*) FROM results WHERE questionnaire_id = ?");
         $stmt->execute([$qid]);
         $has_results = $stmt->fetchColumn() > 0;
@@ -65,17 +58,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Item-Felder
     $texts      = $_POST['item']    ?? [];
     $scales     = $_POST['scale']   ?? [];
-    // Indizes als int
     $negIndices = isset($_POST['negated'])
                   ? array_map('intval', $_POST['negated'])
                   : [];
 
     $errors = [];
-    if (!$name)        $errors[] = "Bitte einen Namen angeben.";
-    if (!$description) $errors[] = "Bitte eine Beschreibung eingeben.";
-    if (!isset($langs[$language]))         $errors[] = "Bitte eine gültige Sprache wählen.";
-    if (!isset($choice_types[$choice_type])) $errors[] = "Bitte einen gültigen Skalentyp wählen.";
-    if (!$copyright)   $errors[] = "Bitte das Copyright bestätigen.";
+    if (!$name)         $errors[] = "Bitte einen Namen angeben.";
+    if (!$description)  $errors[] = "Bitte eine Beschreibung eingeben.";
+    if (!isset($langs[$language]))          $errors[] = "Bitte eine gültige Sprache wählen.";
+    if (!isset($choice_types[$choice_type]))$errors[] = "Bitte einen gültigen Skalentyp wählen.";
+    if (!$copyright)    $errors[] = "Bitte das Copyright bestätigen.";
 
     // Items aufbauen und validieren
     $clean_items = [];
@@ -104,33 +96,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($editing && $questionnaire) {
             if ($has_results) {
                 // Nur Metadaten updaten
-                $upd = $pdo->prepare(
-                  "UPDATE questionnaires
-                     SET name=?, short=?, language=?, description=?, updated_at=NOW()
-                   WHERE id=?"
-                );
+                $upd = $pdo->prepare("
+                    UPDATE questionnaires
+                       SET name=?, short=?, language=?, description=?, updated_at=NOW()
+                     WHERE id=?
+                ");
                 $upd->execute([$name, $short, $language, $description, $qid]);
                 $feedback = [
                     'type'=>'success',
-                    'msg'=>"Metadaten aktualisiert.<br>Items können nicht mehr geändert werden, da bereits Ergebnisse vorliegen."
+                    'msg'=>"Metadaten aktualisiert.<br>Items können nicht geändert werden (Ergebnisse vorhanden)."
                 ];
             } else {
                 // Metadaten + Items
-                $upd = $pdo->prepare(
-                  "UPDATE questionnaires
-                     SET name=?, short=?, language=?, choice_type=?, description=?, updated_at=NOW()
-                   WHERE id=?"
-                );
+                $upd = $pdo->prepare("
+                    UPDATE questionnaires
+                       SET name=?, short=?, language=?, choice_type=?, description=?, updated_at=NOW()
+                     WHERE id=?
+                ");
                 $upd->execute([$name, $short, $language, $choice_type, $description, $qid]);
                 // Alte Items löschen
                 $pdo->prepare("DELETE FROM items WHERE questionnaire_id=?")
                     ->execute([$qid]);
                 // Neue Items einfügen
-                $ins = $pdo->prepare(
-                  "INSERT INTO items
-                     (questionnaire_id,item,negated,scale,created_at,updated_at)
-                   VALUES (?,?,?,?,NOW(),NOW())"
-                );
+                $ins = $pdo->prepare("
+                    INSERT INTO items
+                      (questionnaire_id,item,negated,scale,created_at,updated_at)
+                    VALUES (?,?,?,?,NOW(),NOW())
+                ");
                 foreach ($clean_items as $it) {
                     $ins->execute([$qid, $it['text'], $it['negated'], $it['scale']]);
                 }
@@ -138,19 +130,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } else {
             // Neu anlegen
-            $ins = $pdo->prepare(
-              "INSERT INTO questionnaires
-                 (name,short,language,choice_type,description,created_at,updated_at)
-               VALUES (?,?,?,?,?,NOW(),NOW())"
-            );
+            $ins = $pdo->prepare("
+                INSERT INTO questionnaires
+                  (name,short,language,choice_type,description,created_at,updated_at)
+                VALUES (?,?,?,?,?,NOW(),NOW())
+            ");
             $ins->execute([$name, $short, $language, $choice_type, $description]);
             $new_qid = $pdo->lastInsertId();
             // Items anfügen
-            $ins2 = $pdo->prepare(
-              "INSERT INTO items
-                 (questionnaire_id,item,negated,scale,created_at,updated_at)
-               VALUES (?,?,?,?,NOW(),NOW())"
-            );
+            $ins2 = $pdo->prepare("
+                INSERT INTO items
+                  (questionnaire_id,item,negated,scale,created_at,updated_at)
+                VALUES (?,?,?,?,NOW(),NOW())
+            ");
             foreach ($clean_items as $it) {
                 $ins2->execute([$new_qid, $it['text'], $it['negated'], $it['scale']]);
             }
@@ -171,7 +163,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Mindestens eine Zeile anzeigen
+// Mindestens eine Zeile
 if (empty($items)) {
     $items = [['text'=>'','scale'=>'','negated'=>0]];
 }
@@ -300,14 +292,13 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateItemStats() {
     const rows = list.querySelectorAll('.item-row');
     let count = 0, scales = new Set();
-    rows.forEach((r, i) => {
+    rows.forEach((r, idx) => {
       const txt = r.querySelector('input[name="item[]"]').value.trim();
       if (txt) count++;
       const sc = r.querySelector('input[name="scale[]"]').value.trim();
       if (sc) scales.add(sc);
-      // Checkbox-Wert auf Index
       const cb = r.querySelector('input[type="checkbox"]');
-      if (cb) cb.value = i;
+      if (cb) cb.value = idx;
     });
     let info = count + " Item" + (count !== 1 ? "s" : "");
     if (scales.size) {
@@ -342,7 +333,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target.matches('input[name="item[]"], input[name="scale[]"]')) {
       const rows = list.querySelectorAll('.item-row');
       const last = rows[rows.length - 1];
-      if (e.target.matches('input[name="item[]"]') && last === e.target.closest('.item-row') && e.target.value.trim()) {
+      if (
+        e.target.matches('input[name="item[]"]') &&
+        last === e.target.closest('.item-row') &&
+        e.target.value.trim()
+      ) {
         addBtn.click();
       }
       updateItemStats();
