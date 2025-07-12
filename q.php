@@ -222,38 +222,6 @@ if (!$user) {
     exit;
 }
 
-// --- Fragebogen-Anzeige ---
-
-// Check: Hat Nutzer für diesen Fragebogen schon teilgenommen?
-$stmt = $pdo->prepare("SELECT COUNT(*) FROM results WHERE user_id = ? AND questionnaire_id = ?");
-$stmt->execute([$user['id'], $fragebogen['id']]);
-$already_participated = $stmt->fetchColumn() > 0;
-
-// Falls bereits teilgenommen: Hinweis & Abbruch
-if ($already_participated) {
-    ?>
-    <!doctype html>
-    <html lang="de">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Fragebogen schon ausgefüllt</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    </head>
-    <body>
-    <div class="container my-5">
-        <div class="alert alert-info mt-5">
-            Du hast diesen Fragebogen bereits ausgefüllt.<br>
-            Mehrfacheinsendungen werden aus Gründen der Auswertung nicht gezählt.<br>
-            <a href="index.php" class="btn btn-outline-primary mt-3">Zurück zur Übersicht</a>
-        </div>
-    </div>
-    </body>
-    </html>
-    <?php
-    exit;
-}
-
 // Items abrufen
 $stmt = $pdo->prepare("SELECT * FROM items WHERE questionnaire_id = ? ORDER BY id ASC");
 $stmt->execute([$fragebogen['id']]);
@@ -290,8 +258,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['questionnaire_submit'
 }
 
 // Hilfsfunktion: Skalen-HTML erzeugen (Likert, Slider, Dual, etc.)
-function renderItemInput($item, $name) {
-    $type = intval($item['choicetype']);
+// Verwendet jetzt ausschließlich den choicetype des Fragebogens!
+function renderItemInput($item, $name, $choicetype) {
+    $type = intval($choicetype);
     switch ($type) {
         case 0: // Intervallskala (Slider: 0-100)
             return '<input type="range" min="0" max="100" step="1" class="form-range" name="'.$name.'" required>
@@ -326,7 +295,7 @@ function renderItemInput($item, $name) {
                 6 => ['Stimme gar nicht zu', 'Stimme wenig zu', 'Stimme teilweise zu', 'Stimme eher zu', 'Stimme stark zu', 'Stimme voll zu'],
                 7 => ['Stimme gar nicht zu', 'Stimme kaum zu', 'Stimme wenig zu', 'Unentschieden', 'Stimme eher zu', 'Stimme stark zu', 'Stimme voll zu'],
             ];
-            $count = $type + 1; // Typ 3 = 4-stufig, etc.
+            $count = $type + 1;
             $options = $labels[$type] ?? [];
             $out = '<div class="btn-group w-100" role="group">';
             for ($i=0; $i<$count; $i++) {
@@ -365,10 +334,11 @@ function renderItemInput($item, $name) {
         <?php foreach ($items as $item): ?>
             <div class="frage-item">
                 <div class="frage-label mb-2"><?= nl2br(htmlspecialchars($item['item'])) ?></div>
-                <?= renderItemInput($item, 'item_'.$item['id']) ?>
-                <?php if ($item['scale']): ?>
+                <?= renderItemInput($item, 'item_'.$item['id'], $fragebogen['choice_type']) ?>
+                <?php // Skala nur bei Bedarf anzeigen; aktuell auskommentiert ?>
+                <?php /* if ($item['scale']): ?>
                     <div class="form-text mt-1"><small>Skala: <?= htmlspecialchars($item['scale']) ?></small></div>
-                <?php endif; ?>
+                <?php endif; */ ?>
             </div>
         <?php endforeach; ?>
         <button type="submit" name="questionnaire_submit" class="btn btn-success px-4">Abschicken</button>
