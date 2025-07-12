@@ -64,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Item-Felder
     $texts      = $_POST['item']    ?? [];
     $scales     = $_POST['scale']   ?? [];
-    $negIndices = $_POST['negated'] ?? [];  // list of indices
+    $negIndices = $_POST['negated'] ?? [];  // Liste von Zeilen-Indizes
 
     $errors = [];
     if (!$name)        $errors[] = "Bitte einen Namen angeben.";
@@ -176,13 +176,15 @@ if (empty($items)) {
 <!doctype html>
 <html lang="de">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title><?= $editing ? "Fragebogen bearbeiten" : "Neuen Fragebogen erstellen" ?></title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title><?= $editing ? "Fragebogen bearbeiten" : "Fragebogen erstellen" ?></title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
   <style>
-    body{background:#f7f9fb}
-    .card{box-shadow:0 6px 24px rgba(0,0,0,0.07)}
+    body { background:#f7f9fb; }
+    .card { box-shadow:0 6px 24px rgba(0,0,0,0.07); }
+    .form-check-input { margin-top:0.3em; }
   </style>
 </head>
 <body>
@@ -196,123 +198,152 @@ if (empty($items)) {
     <!-- Metadaten -->
     <div class="card mb-4"><div class="card-body">
       <div class="row mb-3">
-        <div class="col-md-7">
+        <div class="col-md-7 mb-3 mb-md-0">
           <label class="form-label">Name *</label>
-          <input name="name" class="form-control" placeholder="Name *" required maxlength="255"
-                 value="<?=htmlspecialchars($questionnaire['name']??'')?>"
-                 <?= $has_results?'readonly':''?>>
+          <input name="name" class="form-control" required maxlength="255"
+                 value="<?= htmlspecialchars($questionnaire['name'] ?? $_POST['name'] ?? '') ?>"
+                 <?= $has_results ? 'readonly' : '' ?>>
         </div>
         <div class="col-md-5">
-          <label class="form-label">Kürzel</label>
-          <input name="short" class="form-control" placeholder="Kürzel"
-                 value="<?=htmlspecialchars($questionnaire['short']??'')?>"
-                 <?= $has_results?'readonly':''?>>
+          <label class="form-label">Kürzel (optional)</label>
+          <input name="short" class="form-control" maxlength="50"
+                 value="<?= htmlspecialchars($questionnaire['short'] ?? $_POST['short'] ?? '') ?>"
+                 <?= $has_results ? 'readonly' : '' ?>>
         </div>
       </div>
       <div class="row mb-3">
-        <div class="col-md-6">
+        <div class="col-md-6 mb-3 mb-md-0">
           <label class="form-label">Sprache *</label>
-          <select name="language" class="form-select" required <?= $has_results?'disabled':''?>>
+          <select name="language" class="form-select" required <?= $has_results ? 'disabled' : '' ?>>
             <option value="">Bitte wählen</option>
-            <?php foreach($langs as $c=>$l): ?>
-              <option value="<?=$c?>" <?=(($questionnaire['language']??'')===$c?'selected':'')?>><?=$l?></option>
-            <?php endforeach;?>
+            <?php foreach ($langs as $code => $lang): ?>
+              <option value="<?= $code ?>" <?= (($questionnaire['language'] ?? $_POST['language'] ?? '') === $code) ? 'selected' : '' ?>>
+                <?= $lang ?> (<?= $code ?>)
+              </option>
+            <?php endforeach; ?>
           </select>
+          <?php if ($has_results): ?>
+            <input type="hidden" name="language" value="<?= htmlspecialchars($questionnaire['language']) ?>">
+          <?php endif; ?>
         </div>
         <div class="col-md-6">
           <label class="form-label">Skalentyp *</label>
-          <select name="choice_type" class="form-select" required <?= $has_results?'disabled':''?>>
+          <select name="choice_type" class="form-select" required <?= $has_results ? 'disabled' : '' ?>>
             <option value="">Bitte wählen</option>
-            <?php foreach($choice_types as $v=>$t): ?>
-              <option value="<?=$v?>" <?=(($questionnaire['choice_type']??'')==$v?'selected':'')?>><?=$t?></option>
-            <?php endforeach;?>
+            <?php foreach ($choice_types as $val => $txt): ?>
+              <option value="<?= $val ?>" <?= ((($questionnaire['choice_type'] ?? $_POST['choice_type'] ?? '') == $val) ? 'selected' : '') ?>>
+                <?= $txt ?>
+              </option>
+            <?php endforeach; ?>
           </select>
+          <?php if ($has_results): ?>
+            <input type="hidden" name="choice_type" value="<?= intval($questionnaire['choice_type']) ?>">
+          <?php endif; ?>
         </div>
       </div>
       <div class="mb-3">
         <label class="form-label">Beschreibung *</label>
-        <textarea name="description" class="form-control" rows="2" required><?=htmlspecialchars($questionnaire['description']??'')?></textarea>
+        <textarea name="description" class="form-control" required rows="2"><?= htmlspecialchars($questionnaire['description'] ?? $_POST['description'] ?? '') ?></textarea>
       </div>
     </div></div>
 
     <!-- Items -->
     <div class="card mb-4"><div class="card-body">
-      <label class="form-label">Items *</label>
-      <?php if($has_results):?><div class="alert alert-info">Items gesperrt (Ergebnisse existieren).</div><?php endif;?>
+      <label class="form-label mb-2">Items *</label>
+      <?php if ($has_results): ?>
+        <div class="alert alert-info">Items können nicht geändert werden, da bereits Ergebnisse vorliegen.</div>
+      <?php endif; ?>
       <div id="itemsList">
-        <?php foreach($items as $i=>$it): ?>
-          <div class="d-flex mb-2 item-row">
+        <?php foreach ($items as $i => $it): ?>
+          <div class="d-flex align-items-center mb-2 item-row">
             <input name="item[]" class="form-control me-2" placeholder="Text *" required
-                   value="<?=htmlspecialchars($it['item'])?>" <?= $has_results?'readonly':''?>>
-            <input name="scale[]" class="form-control me-2" placeholder="Subskala"
-                   value="<?=htmlspecialchars($it['scale'])?>" <?= $has_results?'readonly':''?>>
-            <input type="checkbox" name="negated[]" value="<?=$i?>"
-                   class="form-check-input me-2" <?=($it['negated']?'checked':'')?> <?= $has_results?'disabled':''?>>
-            <?php if(!$has_results):?>
-              <button type="button" class="btn btn-danger btn-sm btn-remove-item">&times;</button>
-            <?php endif;?>
+                   value="<?= htmlspecialchars($it['item']) ?>" <?= $has_results ? 'readonly' : '' ?>>
+            <input name="scale[]" class="form-control me-2" placeholder="Subskala (optional)"
+                   value="<?= htmlspecialchars($it['scale']) ?>" <?= $has_results ? 'readonly' : '' ?>>
+            <input type="checkbox" name="negated[]" value="<?= $i ?>"
+                   class="form-check-input me-2"
+                   <?= ($it['negated'] ? 'checked' : '') ?> <?= $has_results ? 'disabled' : '' ?>>
+            <?php if (!$has_results): ?>
+              <button type="button" class="btn btn-link text-danger btn-remove-item px-2">&times;</button>
+            <?php endif; ?>
           </div>
-        <?php endforeach;?>
+        <?php endforeach; ?>
       </div>
-      <?php if(!$has_results):?>
-        <button type="button" id="btnAddItem" class="btn btn-outline-secondary btn-sm">Weiteres Item</button>
-      <?php endif;?>
-      <div class="mt-2 text-muted" id="itemStats"></div>
+      <?php if (!$has_results): ?>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnAddItem">Weiteres Item hinzufügen</button>
+      <?php endif; ?>
+      <div class="mt-3 text-muted small" id="itemStats"></div>
     </div></div>
 
     <div class="form-check mb-3">
-      <input name="copyright" type="checkbox" class="form-check-input" required>
-      <label class="form-check-label">Ich besitze die Rechte am Inhalt.</label>
+      <input name="copyright" class="form-check-input" type="checkbox" required>
+      <label class="form-check-label">Ich bestätige, dass ich der Eigentümer dieses Fragebogens bin und alle Rechte am Inhalt besitze.</label>
     </div>
 
-    <button type="submit" class="btn btn-success"><?= $editing?'Speichern':'Erstellen'?></button>
+    <button type="submit" class="btn btn-success"><?= $editing ? "Speichern" : "Fragebogen erstellen" ?></button>
+    <a href="edit_questionnaire.php" class="btn btn-link">Neuen Fragebogen anlegen</a>
   </form>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded',()=>{
+document.addEventListener('DOMContentLoaded', () => {
   const list = document.getElementById('itemsList');
-  const add  = document.getElementById('btnAddItem');
-  const stats= document.getElementById('itemStats');
+  const addBtn = document.getElementById('btnAddItem');
+  const stats = document.getElementById('itemStats');
 
-  function updateStats(){
-    const rows=list.querySelectorAll('.item-row');
-    let cnt=0, scales=new Set();
-    rows.forEach((r,i)=>{
-      if(r.querySelector('input[name="item[]"]').value.trim()) cnt++;
-      const s=r.querySelector('input[name="scale[]"]').value.trim();
-      if(s) scales.add(s);
+  function updateItemStats() {
+    const rows = list.querySelectorAll('.item-row');
+    let count = 0, scales = new Set();
+    rows.forEach((r, i) => {
+      const txt = r.querySelector('input[name="item[]"]').value.trim();
+      if (txt) count++;
+      const sc = r.querySelector('input[name="scale[]"]').value.trim();
+      if (sc) scales.add(sc);
+      // Setze Checkbox-Wert auf Index
       r.querySelector('input[type="checkbox"]').value = i;
     });
-    let msg = `${cnt} Item${cnt!==1?'s':''}`;
-    if(scales.size) msg+=` | ${scales.size} Subskala${scales.size!==1?'en':''}: ${[...scales].join(', ')}`;
-    stats.innerText = msg;
+    let info = count + " Item" + (count !== 1 ? "s" : "");
+    if (scales.size) {
+      info += " | " + scales.size + " Subskala" + (scales.size !== 1 ? "en" : "") + ": " + [...scales].join(", ");
+    }
+    stats.innerText = info;
   }
 
-  if(add){
-    add.onclick=()=>{
-      const div=document.createElement('div');
-      div.className='d-flex mb-2 item-row';
-      div.innerHTML=`
+  if (addBtn) {
+    addBtn.addEventListener('click', () => {
+      const div = document.createElement('div');
+      div.className = 'd-flex align-items-center mb-2 item-row';
+      div.innerHTML = `
         <input name="item[]" class="form-control me-2" placeholder="Text *" required>
-        <input name="scale[]" class="form-control me-2" placeholder="Subskala">
+        <input name="scale[]" class="form-control me-2" placeholder="Subskala (optional)">
         <input type="checkbox" name="negated[]" class="form-check-input me-2" value="0">
-        <button type="button" class="btn btn-danger btn-sm btn-remove-item">&times;</button>
+        <button type="button" class="btn btn-link text-danger btn-remove-item px-2">&times;</button>
       `;
       list.appendChild(div);
-      updateStats();
-    };
+      updateItemStats();
+    });
   }
 
-  list.addEventListener('click',e=>{
-    if(e.target.classList.contains('btn-remove-item')){
+  list.addEventListener('click', e => {
+    if (e.target.classList.contains('btn-remove-item')) {
       e.target.closest('.item-row').remove();
-      updateStats();
+      updateItemStats();
     }
   });
 
-  list.addEventListener('input',updateStats);
-  updateStats();
+  list.addEventListener('input', e => {
+    if (e.target.matches('input[name="item[]"], input[name="scale[]"]')) {
+      const rows = list.querySelectorAll('.item-row');
+      const last = rows[rows.length - 1];
+      if (e.target.matches('input[name="item[]"]') && last === e.target.closest('.item-row') && e.target.value.trim()) {
+        addBtn.click();
+      }
+      updateItemStats();
+    }
+  });
+
+  updateItemStats();
 });
 </script>
 </body>
