@@ -1,4 +1,5 @@
 <?php
+ob_start();
 require_once 'include.inc.php';
 $pageTitle       = 'Übersicht';
 $pageDescription = 'Du möchtest Fragen stellen? Du möchtest Fragen beantworten? PHPsychometric macht\'s möglich!';
@@ -302,6 +303,7 @@ function renderItemInput($item, $name, $choicetype) {
             return '<input type="text" class="form-control" name="'.$name.'" required>';
     }
 }
+require_once 'navbar.inc.php';
 ?>
 <div class="container my-4" style="max-width:900px;">
     <h3 class="mb-3"><?= htmlspecialchars($fragebogen['name']) ?></h3>
@@ -321,4 +323,7 @@ function renderItemInput($item, $name, $choicetype) {
     </form>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<?php include('footer.inc.php'); ?>
+<?php
+  include('footer.inc.php');
+  ob_end_flush();
+  ?>
