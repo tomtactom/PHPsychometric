@@ -179,3 +179,110 @@ body {
 body { background:#f7f9fb; }
 .card { box-shadow:0 6px 24px rgba(0,0,0,0.07); }
 .form-check-input { margin-top:0.3em; }
+
+/* === Edit Questionnaire Page Enhancements === */
+
+/* 1. Hintergrund-Gradient */
+body {
+  background: linear-gradient(135deg, #eff4fc 0%, #ffffff 100%);
+}
+
+/* 2. Frosted-Glass Cards */
+#questionnaireForm .card {
+  background: rgba(255, 255, 255, 0.75);
+  border: none;
+  border-radius: 1rem;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  backdrop-filter: blur(10px);
+}
+
+/* 3. Abschnittsüberschriften & Labels */
+#questionnaireForm label,
+#questionnaireForm .form-label {
+  color: #2E5BDA;
+  font-weight: 600;
+}
+#questionnaireForm h2 {
+  font-size: 2rem;
+  color: #1F3A93;
+  margin-bottom: 1.5rem;
+}
+
+/* 4. Inputs & Textareas */
+#questionnaireForm .form-control,
+#questionnaireForm .form-select,
+#questionnaireForm textarea {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid #ccc;
+  border-radius: 0;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+#questionnaireForm .form-control:focus,
+#questionnaireForm .form-select:focus,
+#questionnaireForm textarea:focus {
+  border-bottom-color: #2E5BDA;
+  box-shadow: none;
+}
+
+/* 5. Buttons mit Micro-Interactions */
+#questionnaireForm .btn-success,
+#questionnaireForm .btn-outline-secondary {
+  border-radius: 2rem;
+  padding: 0.75rem 1.5rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+#questionnaireForm .btn-success:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+}
+#questionnaireForm .btn-outline-secondary {
+  border-color: #2E5BDA;
+  color: #2E5BDA;
+}
+#questionnaireForm .btn-outline-secondary:hover {
+  background: #2E5BDA;
+  color: #fff;
+}
+
+/* 6. Drag-Handle Styling */
+.item-row .drag-handle {
+  font-size: 1.4rem;
+  color: #2E5BDA;
+  cursor: grab;
+  transition: color 0.3s ease;
+}
+.item-row .drag-handle:active {
+  cursor: grabbing;
+}
+.item-row .drag-handle:hover {
+  color: #1a2e75;
+}
+
+/* 7. Remove-Button */
+.btn-remove-item {
+  font-size: 1.2rem;
+  color: #e63946;
+  transition: color 0.2s ease;
+}
+.btn-remove-item:hover {
+  color: #a5172a;
+}
+
+/* 8. Item-Statistik */
+#itemStats {
+  font-style: italic;
+  color: #555;
+  text-align: right;
+  margin-top: 0.5rem;
+}
+
+/* 9. Responsive Spacing */
+@media (min-width: 768px) {
+  #questionnaireForm .row > [class*="col-"] {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}

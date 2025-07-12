@@ -29,6 +29,7 @@ $questionnaires = $stmt->fetchAll();
     <h1>Willkommen bei PHPsychometric</h1>
     <p>Erstelle &amp; beantworte psychometrische Fragebögen – anonym und interaktiv.</p>
     <a href="#browse" class="btn btn-lg btn-light mt-3">Fragebögen entdecken</a>
+    <a href="./edit_questionnaire.php" class="btn btn-lg btn-light mt-3">Entdeckungen teilen</a>
   </div>
 </section>
 
