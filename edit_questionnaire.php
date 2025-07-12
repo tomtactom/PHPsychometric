@@ -194,9 +194,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['name'])) {
         }
         // Daten neu laden
         if ($editing) {
-            $items = $pdo->prepare("SELECT * FROM items WHERE questionnaire_id=? ORDER BY id")
-                         ->execute([$qid])
-                         ->fetchAll();
+            $stmtReload = $pdo->prepare("SELECT * FROM items WHERE questionnaire_id = ? ORDER BY id ASC");
+            $stmtReload->execute([$qid]);
+            $items = $stmtReload->fetchAll();
         }
     } else {
         $feedback = ['type'=>'danger','msg'=> implode('<br>',$errors)];
