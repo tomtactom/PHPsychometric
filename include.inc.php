@@ -99,6 +99,42 @@ function initialize_database_if_needed(PDO $pdo, $initFile = 'db.sql') {
 }
 initialize_database_if_needed($pdo);
 
+/**
+ * Prüft, ob das übergebene Passwort das Admin-Passwort ist.
+ */
+function verify_admin(string $pw): bool {
+    return password_verify($pw, ADMIN_PASSWORD_HASH);
+}
+
+/**
+ * Prüft, ob das übergebene Passwort dem Autor-Passwort dieses Fragebogens entspricht.
+ */
+function verify_author(PDO $pdo, int $qid, string $pw): bool {
+    $stmt = $pdo->prepare("SELECT author_password_hash FROM questionnaires WHERE id = ?");
+    $stmt->execute([$qid]);
+    $hash = $stmt->fetchColumn();
+    return $hash && password_verify($pw, $hash);
+}
+
+/**
+ * Markiert in der Session, dass der Nutzer für diesen Fragebogen (oder global als Admin) autorisiert ist.
+ */
+function authorize(int $qid, bool $asAdmin = false): void {
+    if ($asAdmin) {
+        $_SESSION['is_admin'] = true;
+    }
+    $_SESSION['auth_questionnaires'][$qid] = true;
+}
+
+/**
+ * Prüft, ob der Nutzer bereits eingeloggt ist (Admin oder Fragen-Autor für $qid).
+ */
+function is_authorized(int $qid): bool {
+    return (!empty($_SESSION['is_admin']))
+        || (!empty($_SESSION['auth_questionnaires'][$qid]));
+}
+
+
 // 8. Globale UX-Einstellung
 if (!defined('SITE_TITLE')) define('SITE_TITLE', '📝 Online-Fragebögen');
 
