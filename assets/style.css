@@ -1,3 +1,219 @@
+/* ────────────────────────────────────────────────────────────
+   🕊️ Wholesome Site-Wide Theme
+──────────────────────────────────────────────────────────── */
+
+:root {
+  /* Farbpalette */
+  --clr-bg:      #f5f7fa;
+  --clr-surface: #ffffff;
+  --clr-primary: #60a5fa;
+  --clr-accent:  #fda4af;
+  --clr-muted:   #94a3b8;
+  --clr-text:    #334155;
+
+  /* Typografie */
+  --fs-base: 1rem;
+  --fs-lg:   1.125rem;
+  --fs-xl:   1.5rem;
+  --ff-body: 'Inter', sans-serif;
+  --ff-heading: 'Poppins', sans-serif;
+
+  /* Abstände & Ecken */
+  --spacing:    clamp(1rem, 2.5vw, 2rem);
+  --radius:     1rem;
+  --shadow-light: 0 4px 12px rgba(0, 0, 0, 0.05);
+  --shadow-strong:0 8px 24px rgba(0, 0, 0, 0.1);
+
+  /* Transitions */
+  --transition-fast: 0.2s ease-in-out;
+  --transition:      0.3s ease-in-out;
+}
+
+/* 1. Grundlegendes */
+body {
+  background: var(--clr-bg);
+  color: var(--clr-text);
+  font-family: var(--ff-body);
+  font-size: var(--fs-base);
+  line-height: 1.6;
+}
+
+/* 2. Überschriften */
+h1, h2, h3, h4, h5 {
+  font-family: var(--ff-heading);
+  color: var(--clr-primary);
+  margin-bottom: var(--spacing);
+}
+h1 { font-size: var(--fs-xl); }
+h2 { font-size: calc(var(--fs-xl) * 0.9); }
+
+/* 3. Navbar */
+.navbar {
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-light);
+  padding: 0.75rem var(--spacing);
+}
+.navbar .nav-link {
+  color: var(--clr-text);
+  transition: color var(--transition-fast);
+}
+.navbar .nav-link:hover,
+.navbar .nav-link.active {
+  color: var(--clr-primary);
+}
+
+/* 4. Cards (index, faq, q, edit) */
+.card,
+.index-card,
+.faq-card {
+  background: var(--clr-surface);
+  border: none;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-light);
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+.card:hover,
+.index-card:hover,
+.faq-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-strong);
+}
+
+/* 5. Hero-Section (index.php) */
+.hero {
+  background: linear-gradient(135deg, #bae6fd 0%, #e0f2fe 100%);
+  color: var(--clr-text);
+  padding: 4rem 1rem;
+  text-align: center;
+}
+.hero h1 { font-size: clamp(2rem, 5vw, 3rem); }
+.hero p  { font-size: var(--fs-lg); }
+.hero .btn-light {
+  background: var(--clr-surface);
+  color: var(--clr-primary);
+  border-radius: 2rem;
+  padding: 0.75rem 1.5rem;
+  font-weight: 600;
+  transition: background var(--transition);
+}
+.hero .btn-light:hover {
+  background: var(--clr-primary);
+  color: #fff;
+}
+
+/* 6. Suchleiste */
+.search-bar input {
+  border-radius: var(--radius);
+  border: 1px solid var(--clr-muted);
+  padding: 0.75rem 1rem;
+  transition: border-color var(--transition);
+}
+.search-bar input:focus {
+  outline: none;
+  border-color: var(--clr-primary);
+}
+
+/* 7. Buttons */
+.btn-primary {
+  background: var(--clr-primary);
+  border-color: var(--clr-primary);
+  transition: transform var(--transition-fast);
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+}
+.btn-outline-success {
+  color: var(--clr-primary);
+  border-color: var(--clr-primary);
+}
+.btn-outline-success:hover {
+  background: var(--clr-primary);
+  color: #fff;
+}
+
+/* 8. Formulareingaben (q.php, edit_questionnaire.php) */
+.form-control,
+.form-select,
+textarea {
+  background: var(--clr-surface);
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.form-control:focus,
+.form-select:focus,
+textarea:focus {
+  border-color: var(--clr-primary);
+  box-shadow: 0 0 0 0.2rem rgba(96,165,250,0.25);
+  outline: none;
+}
+
+/* 9. Frage-Items (q.php) */
+.frage-item {
+  margin-bottom: var(--spacing);
+  padding: var(--spacing);
+  border-radius: var(--radius);
+  background: var(--clr-surface);
+  box-shadow: var(--shadow-light);
+}
+
+/* 10. Edit-Page Glassmorphism (edit_questionnaire.php) */
+#questionnaireForm .card {
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: blur(6px);
+}
+
+/* 11. Drag & Drop Handle */
+.drag-handle {
+  cursor: grab;
+  color: var(--clr-primary);
+  font-size: 1.5rem;
+}
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* 12. FAQ-Karten (faq.php) */
+.faq-card {
+  cursor: pointer;
+  transition: transform var(--transition-fast);
+}
+.faq-card:hover,
+.faq-card:focus {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-strong);
+}
+.modal-header {
+  background: var(--clr-primary);
+  color: #fff;
+  border: none;
+}
+
+/* 13. Footer */
+footer {
+  background: #fff;
+  padding: var(--spacing);
+  color: var(--clr-muted);
+  text-align: center;
+  border-top: 1px solid #e2e8f0;
+}
+
+/* 14. Animations */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in {
+  animation: fadeInUp 0.6s ease-out both;
+}
+
+/* 15. Responsive Abstände */
+@media (max-width: 576px) {
+  .container { padding: 0 1rem; }
+}
+
+
 body {
     background: #f8fafc;
 }
