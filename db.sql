@@ -11,6 +11,7 @@ CREATE TABLE questionnaires (
     choice_type INT,                             -- Typ der Antwortmöglichkeit (numerisch codiert)
     author_password_hash VARCHAR(255),           -- Fragebogen-Passwort (Autor Passwort), zur editirung des Fragebogens
     description TEXT,                            -- Freitextbeschreibung
+    operationalization JSON NOT NULL DEFAULT ('{"global":"","subscales":{}}'),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,                     -- Erstellungszeitpunkt
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP -- Zeitpunkt der letzten Änderung
 );
