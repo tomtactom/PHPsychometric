@@ -115,12 +115,12 @@ function interpretLabel($value, $min, $max) {
 
 // Gesamtergebnis
 list($overallMin, $overallMax) = minMax(count($R), $ct);
-$totalSum  = calcSum($R, $ct);
-$overallPct= ($overallMax > $overallMin)
-           ? ($totalSum - $overallMin) / ($overallMax - $overallMin)
-           : 0;
-$overallLabel = interpretLabel($totalSum, $overallMin, $overallMax);
-$displayRaw   = number_format($totalSum / count($R), 1, ',', '') . ' von ' . itemMax($ct);
+$totalSum   = calcSum($R, $ct);
+$overallPct = ($overallMax > $overallMin)
+            ? ($totalSum - $overallMin) / ($overallMax - $overallMin)
+            : 0;
+$overallLabel= interpretLabel($totalSum, $overallMin, $overallMax);
+$displayRaw  = number_format($totalSum / count($R), 1, ',', '') . ' von ' . itemMax($ct);
 
 // Teilnehmerzahl
 $stmt = $pdo->prepare("SELECT COUNT(DISTINCT user_id) FROM results WHERE questionnaire_id = ?");
@@ -182,6 +182,7 @@ $scaleNames = [
     .interpret { font-weight:bold; margin-top:.5rem; color:#333; }
     .normcard, .sharecard { background:#fff; padding:1.5rem; border-radius:.5rem;
                             box-shadow:0 4px 20px rgba(0,0,0,0.04); margin-bottom:2rem; }
+    .sharecard .btn { min-width:140px; }
   </style>
 </head>
 <body>
@@ -190,7 +191,8 @@ $scaleNames = [
   <!-- Hero -->
   <div class="hero">
     <h2><?= htmlspecialchars($Q['name']) ?></h2>
-    <p><i class="bi bi-list-check"></i> <strong>Skalentyp:</strong> <?= $scaleNames[$ct] ?></p>
+    <p><i class="bi bi-list-check"></i>
+      <strong>Skalentyp:</strong> <?= $scaleNames[$ct] ?></p>
     <?php if (!empty($ops['global'])): ?>
       <p class="text-muted small"><i class="bi bi-info-circle"></i>
         <?= nl2br(htmlspecialchars($ops['global'])) ?>
@@ -200,7 +202,7 @@ $scaleNames = [
     <p class="h5 mb-1"><?= htmlspecialchars($displayRaw) ?></p>
     <p class="interpret"><?= htmlspecialchars($overallLabel) ?></p>
     <button class="btn btn-outline-secondary" onclick="window.print()">
-      <i class="bi bi-printer me-1"></i>Drücken
+      <i class="bi bi-printer me-1"></i>Drucken
     </button>
   </div>
 
@@ -257,26 +259,26 @@ $scaleNames = [
          class="btn btn-primary">
         <i class="bi bi-envelope-fill me-1"></i>E‑Mail
       </a>
-      <a href="https://api.whatsapp.com/send?text=<?= $shareText ?>" target="_blank"
-         class="btn btn-success">
-        <i class="bi bi-whatsapp me-1"></i>WhatsApp
-      </a>
-      <a href="https://t.me/share/url?url=<?= rawurlencode($shareUrl) ?>&text=<?= $shareText ?>"
+      <a href="https://signal.me/#p?text=<?= $shareText ?>"
          target="_blank" class="btn btn-info text-white">
-        <i class="bi bi-telegram me-1"></i>Telegram
+        <i class="bi bi-chat-dots-fill me-1"></i>Signal
       </a>
-      <a href="https://twitter.com/intent/tweet?text=<?= $shareText ?>"
-         target="_blank" class="btn btn-outline-info">
-        <i class="bi bi-twitter me-1"></i>Twitter
-      </a>
-      <a href="https://www.facebook.com/sharer/sharer.php?u=<?= rawurlencode($shareUrl) ?>"
-         target="_blank" class="btn btn-outline-primary">
-        <i class="bi bi-facebook me-1"></i>Facebook
-      </a>
-      <a href="#" onclick="navigator.clipboard.writeText('<?= htmlspecialchars($shareUrl) ?>');alert('Link kopiert!');return false;"
-         class="btn btn-outline-secondary">
+      <button class="btn btn-danger"
+              onclick="navigator.clipboard.writeText('<?= htmlspecialchars($shareUrl) ?>');alert('Link kopiert. Öffne Instagram und füge ihn ein.');">
+        <i class="bi bi-instagram me-1"></i>Instagram
+      </button>
+      <button class="btn btn-warning text-white"
+              onclick="navigator.clipboard.writeText('<?= htmlspecialchars($shareUrl) ?>');alert('Link kopiert. Öffne TikTok und füge ihn ein.');">
+        <i class="bi bi-tiktok me-1"></i>TikTok
+      </button>
+      <button class="btn btn-dark"
+              onclick="navigator.clipboard.writeText('<?= htmlspecialchars($shareUrl) ?>');alert('Link kopiert. Öffne Threads und füge ihn ein.');">
+        <i class="bi bi-chat-quote-fill me-1"></i>Threads
+      </button>
+      <button class="btn btn-outline-secondary"
+              onclick="navigator.clipboard.writeText('<?= htmlspecialchars($shareUrl) ?>');alert('Link kopiert!');">
         <i class="bi bi-clipboard me-1"></i>Link kopieren
-      </a>
+      </button>
     </div>
   </div>
 
