@@ -23,8 +23,8 @@ if (!$qid) {
     die('<div class="alert alert-danger m-5">Ungültige Anfrage.</div>');
 }
 
-// Fragebogen inkl. Skalentyp laden
-$stmt = $pdo->prepare("SELECT * FROM questionnaires WHERE id = ?");
+// Fragebogen inkl. Skalentyp und Operationalisierung laden
+$stmt = $pdo->prepare("SELECT *, operationalization FROM questionnaires WHERE id = ?");
 $stmt->execute([$qid]);
 $fragebogen = $stmt->fetch();
 if (!$fragebogen) {
@@ -32,6 +32,13 @@ if (!$fragebogen) {
     die('<div class="alert alert-danger m-5">Fragebogen nicht gefunden.</div>');
 }
 
+// JSON Operationalisierung parsen
+$ops = [];
+if (!empty($fragebogen['operationalization'])) {
+    $ops = json_decode($fragebogen['operationalization'], true) ?: [];
+}
+
+// Redirect wenn nicht befüllt
 $user_id = getUserIdFromCookie();
 if (!$user_id) {
     header("Location: q.php?id={$qid}");
@@ -149,7 +156,8 @@ $shareText = rawurlencode(
     body{background:#f8fafc}
     .card{box-shadow:0 4px 24px rgba(0,0,0,0.05)}
     .progress{height:1.7rem}
-    .scale-head{font-size:1.1em;font-weight:600}
+    .scale-head{font-size:1.1em;font-weight:600; display:flex; align-items:center;}
+    .info-icon { margin-left:.5rem; cursor:pointer; color:#6c757d; }
     .subtext{font-size:0.95em;color:#7d7d7d}
     .skala-block{margin-bottom:2.5rem}
     .share-btn{margin-right:.5rem}
@@ -162,10 +170,15 @@ $shareText = rawurlencode(
     <a href="index.php" class="btn btn-outline-primary btn-sm">Zur Übersicht</a>
   </div>
 
-  <div class="card mb-4"><div class="card-body">
-    <h5 class="mb-2"><?=htmlspecialchars($fragebogen['name'])?></h5>
-    <p class="text-muted"><?=nl2br(htmlspecialchars($fragebogen['description']))?></p>
-  </div></div>
+  <!-- Global‑Operationalisierung -->
+  <?php if(!empty($ops['global'])): ?>
+    <div class="card mb-4">
+      <div class="card-body">
+        <h5 class="mb-2"><?=htmlspecialchars($fragebogen['name'])?> (Messung)</h5>
+        <p class="mb-0"><?=nl2br(htmlspecialchars($ops['global']))?></p>
+      </div>
+    </div>
+  <?php endif; ?>
 
   <!-- Skalenblöcke -->
   <?php foreach($skala_map as $scale=>$items):
@@ -174,13 +187,28 @@ $shareText = rawurlencode(
     $sum=calcSum($items,$ct);
     $pct=($max>$min)?($sum-$min)/($max-$min):1;
     $cls=barClass($pct);
-    $label=($scale===' _gesamt') ? 'Gesamtergebnis' : htmlspecialchars($scale);
-    $disp=isLikert($ct)||$ct===0
-          ? number_format($sum/$n,1,',','').' / '.itemMax($ct)
-          : $sum.' / '.$max;
+    $label = $scale === '_gesamt'
+           ? 'Gesamtergebnis'
+           : htmlspecialchars($scale);
+    $disp   = isLikert($ct)||$ct===0
+            ? number_format($sum/$n,1,',','').' / '.itemMax($ct)
+            : $sum.' / '.$max;
+    $subDesc = $ops['subscales'][$scale] ?? '';
   ?>
     <div class="skala-block">
-      <div class="scale-head mb-2"><?=$label?></div>
+      <div class="scale-head mb-2">
+        <?=$label?>
+        <?php if($subDesc): ?>
+          <span tabindex="0"
+                class="info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                title="<?=$label?>"
+                data-bs-content="<?=htmlspecialchars($subDesc)?>">
+            ℹ️
+          </span>
+        <?php endif; ?>
+      </div>
       <div class="progress mb-2" title="<?=round($pct*100)?>%">
         <div class="progress-bar <?=$cls?>" role="progressbar"
              style="width:<?=round($pct*100)?>%;"
@@ -207,12 +235,10 @@ $shareText = rawurlencode(
     <?php else: ?>
       <p>Ausreichend Teilnahmen für Normwerte (≥<?=NORM_THRESHOLD?>).</p>
     <?php endif; ?>
-
     <?php if($participants < CRONBACH_THRESHOLD): ?>
       <p>Noch <strong><?=CRONBACH_THRESHOLD - $participants?></strong> Teilnahmen bis zur Berechnung von Cronbach’s Alpha (mindestens <?=CRONBACH_THRESHOLD?>).</p>
     <?php else: ?>
-      <?php $alpha='–'; /* später echte Berechnung */ ?>
-      <p><strong>Cronbach’s Alpha:</strong> <?=$alpha?> (ab <?=CRONBACH_THRESHOLD?> Teilnahmen).</p>
+      <p><strong>Cronbach’s Alpha:</strong> – (berechnet ab <?=CRONBACH_THRESHOLD?> Teilnahmen)</p>
     <?php endif; ?>
   </div></div>
 
@@ -227,7 +253,7 @@ $shareText = rawurlencode(
     <h5>Teile deine Ergebnisse</h5>
     <a class="btn btn-outline-primary share-btn"
        href="mailto:?subject=Mein Ergebnis bei <?=rawurlencode($fragebogen['name'])?>&body=<?=$shareText?>">
-      E-Mail
+      E‑Mail
     </a>
     <a class="btn btn-outline-success share-btn"
        href="https://api.whatsapp.com/send?text=<?=$shareText?>" target="_blank">
@@ -240,5 +266,12 @@ $shareText = rawurlencode(
     Angaben bleiben anonymisiert.
   </div>
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // Bootstrap Popover initialisieren
+  document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
+    new bootstrap.Popover(el);
+  });
+</script>
 <?php include('footer.inc.php'); ?>
