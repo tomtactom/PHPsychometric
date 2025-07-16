@@ -322,7 +322,7 @@ require_once 'navbar.inc.php';
     <!-- Operationalisierung Card -->
     <div class="card mb-4"><div class="card-body">
       <h5 class="form-label">Operationalisierung</h5>
-      <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#OperationalisierungInfo" aria-expanded="false" aria-controls="collapseExample">
+      <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#OperationalisierungInfo" aria-expanded="false" aria-controls="OperationalisierungInfo">
         Wie operationalisiere ich mein Konstrukt?
       </button>
     <div class="collapse" id="OperationalisierungInfo">
