@@ -60,7 +60,7 @@ if (empty($responses)) {
 
 // Letzten vollständigen Durchgang extrahieren
 $itemIds = array_unique(array_column($responses, 'id'));
-$temp = []; $seen = []; $fullRun = [];
+$temp    = []; $seen = []; $fullRun = [];
 foreach ($responses as $r) {
     $temp[] = $r;
     $seen[] = $r['id'];
@@ -69,7 +69,9 @@ foreach ($responses as $r) {
         $temp = []; $seen = [];
     }
 }
-$R = (count($fullRun) === count($itemIds)) ? $fullRun : array_slice($responses, -count($itemIds));
+$R = (count($fullRun) === count($itemIds))
+   ? $fullRun
+   : array_slice($responses, -count($itemIds));
 
 // Gruppieren nach Subskala
 $byScale = [];
@@ -111,12 +113,12 @@ function interpretLabel($value, $min, $max) {
     return "Sehr niedrig";
 }
 
-// Gesamt‑Werte für das Radial‑Chart
+// Gesamtergebnis
 list($overallMin, $overallMax) = minMax(count($R), $ct);
-$totalSum = calcSum($R, $ct);
-$overallPct = ($overallMax > $overallMin)
-            ? ($totalSum - $overallMin) / ($overallMax - $overallMin)
-            : 0;
+$totalSum  = calcSum($R, $ct);
+$overallPct= ($overallMax > $overallMin)
+           ? ($totalSum - $overallMin) / ($overallMax - $overallMin)
+           : 0;
 $overallLabel = interpretLabel($totalSum, $overallMin, $overallMax);
 $displayRaw   = number_format($totalSum / count($R), 1, ',', '') . ' von ' . itemMax($ct);
 
@@ -131,6 +133,18 @@ $shareUrl  = (isset($_SERVER['HTTPS']) ? 'https' : 'http')
            . dirname($_SERVER['REQUEST_URI'])
            . "/q.php?id={$qid}";
 $shareText = rawurlencode("🎉 Mein Ergebnis bei „{$Q['name']}“: {$displayRaw}! " . $shareUrl);
+
+// Skalentyp‑Mapping
+$scaleNames = [
+    0=>"Intervallskala (0–100)",
+    1=>"Dual: Wahr / Falsch",
+    2=>"Dual: Stimme voll zu / Stimme nicht zu",
+    3=>"3‑stufige Likert",
+    4=>"4‑stufige Likert",
+    5=>"5‑stufige Likert",
+    6=>"6‑stufige Likert",
+    7=>"7‑stufige Likert"
+];
 ?>
 <!doctype html>
 <html lang="de">
@@ -138,70 +152,56 @@ $shareText = rawurlencode("🎉 Mein Ergebnis bei „{$Q['name']}“: {$displayR
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Ergebnis | <?=htmlspecialchars($Q['name'])?></title>
+  <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
   <style>
     body { background: #f2f4f8; }
     .radial-progress {
-      --size: 140px;
-      --thickness: 12px;
-      --value: <?= round($overallPct*100) ?>;
-      width: var(--size);
-      height: var(--size);
-      border-radius: 50%;
-      background:
-        conic-gradient(
-          #0d6efd calc(var(--value) * 1%),
-          #e9ecef 0
-        );
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 600;
-      color: #0d6efd;
-      margin: 0 auto 1rem;
-      position: relative;
+      --size: 140px; --thickness: 12px; --value: <?= round($overallPct*100) ?>;
+      width: var(--size); height: var(--size); border-radius:50%;
+      background: conic-gradient(#0d6efd calc(var(--value)*1%), #e9ecef 0);
+      display:flex; align-items:center; justify-content:center;
+      margin:1rem auto;
+      position:relative;
     }
     .radial-progress::before {
-      content: '';
-      position: absolute;
-      width: calc(var(--size) - var(--thickness)*2);
-      height: calc(var(--size) - var(--thickness)*2);
-      background: #f2f4f8;
-      border-radius: 50%;
+      content:''; position:absolute;
+      width:calc(var(--size)-var(--thickness)*2);
+      height:calc(var(--size)-var(--thickness)*2);
+      background:#f2f4f8; border-radius:50%;
     }
-    .radial-progress span {
-      position: relative;
-      z-index: 1;
-      font-size: 1.2rem;
-    }
-    .hero {
-      background: #fff; padding: 1.5rem; border-radius: .5rem;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-      text-align: center; margin-bottom: 2rem;
-    }
-    .subcard {
-      margin-bottom: 1.5rem; padding: 1rem; background: #fff;
-      border-radius: .5rem; box-shadow: 0 4px 20px rgba(0,0,0,0.04);
-    }
-    .subheader { font-weight: 600; margin-bottom: .5rem; }
-    .subdesc  { color: #555; font-size: .95rem; margin-bottom: .75rem; }
-    .interpret { font-weight: bold; margin-top: .5rem; color: #333; }
-    .normcard, .sharecard {
-      background: #fff; padding: 1.5rem; border-radius: .5rem;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.04); margin-bottom: 2rem;
-    }
+    .radial-progress span { position:relative; z-index:1; font-weight:600; color:#0d6efd; }
+    .hero { background:#fff; padding:1.5rem; border-radius:.5rem;
+            box-shadow:0 4px 20px rgba(0,0,0,0.05); text-align:center; margin-bottom:2rem; }
+    .subcard { background:#fff; padding:1rem; border-radius:.5rem;
+               box-shadow:0 4px 20px rgba(0,0,0,0.04); margin-bottom:1.5rem; }
+    .subheader { font-weight:600; margin-bottom:.5rem; }
+    .subdesc  { color:#555; font-size:.95rem; margin-bottom:.75rem; }
+    .interpret { font-weight:bold; margin-top:.5rem; color:#333; }
+    .normcard, .sharecard { background:#fff; padding:1.5rem; border-radius:.5rem;
+                            box-shadow:0 4px 20px rgba(0,0,0,0.04); margin-bottom:2rem; }
   </style>
 </head>
 <body>
 <div class="container py-5" style="max-width:800px;">
 
-  <!-- Gesamt‑Ergebnis -->
+  <!-- Hero -->
   <div class="hero">
     <h2><?= htmlspecialchars($Q['name']) ?></h2>
+    <p><i class="bi bi-list-check"></i> <strong>Skalentyp:</strong> <?= $scaleNames[$ct] ?></p>
+    <?php if (!empty($ops['global'])): ?>
+      <p class="text-muted small"><i class="bi bi-info-circle"></i>
+        <?= nl2br(htmlspecialchars($ops['global'])) ?>
+      </p>
+    <?php endif; ?>
     <div class="radial-progress"><span><?= round($overallPct*100) ?> %</span></div>
     <p class="h5 mb-1"><?= htmlspecialchars($displayRaw) ?></p>
     <p class="interpret"><?= htmlspecialchars($overallLabel) ?></p>
-    <p class="small text-muted">Dies ist eine Roh‑Messung ohne Normvergleich.</p>
+    <button class="btn btn-outline-secondary" onclick="window.print()">
+      <i class="bi bi-printer me-1"></i>Drücken
+    </button>
   </div>
 
   <!-- Subskalen -->
@@ -219,7 +219,7 @@ $shareText = rawurlencode("🎉 Mein Ergebnis bei „{$Q['name']}“: {$displayR
     $interp  = interpretLabel($sum, $mn, $mx);
   ?>
     <div class="subcard">
-      <div class="subheader"><?= $label ?></div>
+      <div class="subheader"><i class="bi bi-bar-chart-fill me-1"></i><?= $label ?></div>
       <?php if ($subdesc): ?>
         <div class="subdesc"><?= nl2br(htmlspecialchars($subdesc)) ?></div>
       <?php endif; ?>
@@ -234,7 +234,7 @@ $shareText = rawurlencode("🎉 Mein Ergebnis bei „{$Q['name']}“: {$displayR
 
   <!-- Normwert‑Statistik -->
   <div class="normcard">
-    <h5>Normwert‑Statistik</h5>
+    <h5><i class="bi bi-people-fill me-1"></i>Normwert‑Statistik</h5>
     <p>Teilnahmen bisher: <strong><?= $participants ?></strong></p>
     <?php if ($participants < NORM_THRESHOLD): ?>
       <p>Noch <strong><?= NORM_THRESHOLD - $participants ?></strong> für aussagekräftige Normwerte.</p>
@@ -250,12 +250,34 @@ $shareText = rawurlencode("🎉 Mein Ergebnis bei „{$Q['name']}“: {$displayR
 
   <!-- Share -->
   <div class="sharecard text-center">
-    <h5>Teile dein Ergebnis</h5>
+    <h5><i class="bi bi-share-fill me-1"></i>Teile dein Ergebnis</h5>
     <p>Fordere Freunde heraus &amp; verbessere die Normwerte!</p>
-    <a href="mailto:?subject=Mein Ergebnis&body=<?= $shareText ?>"
-       class="btn btn-primary me-2">E‑Mail</a>
-    <a href="https://api.whatsapp.com/send?text=<?= $shareText ?>"
-       target="_blank" class="btn btn-success">WhatsApp</a>
+    <div class="d-flex justify-content-center flex-wrap gap-2">
+      <a href="mailto:?subject=Mein Ergebnis&body=<?= $shareText ?>"
+         class="btn btn-primary">
+        <i class="bi bi-envelope-fill me-1"></i>E‑Mail
+      </a>
+      <a href="https://api.whatsapp.com/send?text=<?= $shareText ?>" target="_blank"
+         class="btn btn-success">
+        <i class="bi bi-whatsapp me-1"></i>WhatsApp
+      </a>
+      <a href="https://t.me/share/url?url=<?= rawurlencode($shareUrl) ?>&text=<?= $shareText ?>"
+         target="_blank" class="btn btn-info text-white">
+        <i class="bi bi-telegram me-1"></i>Telegram
+      </a>
+      <a href="https://twitter.com/intent/tweet?text=<?= $shareText ?>"
+         target="_blank" class="btn btn-outline-info">
+        <i class="bi bi-twitter me-1"></i>Twitter
+      </a>
+      <a href="https://www.facebook.com/sharer/sharer.php?u=<?= rawurlencode($shareUrl) ?>"
+         target="_blank" class="btn btn-outline-primary">
+        <i class="bi bi-facebook me-1"></i>Facebook
+      </a>
+      <a href="#" onclick="navigator.clipboard.writeText('<?= htmlspecialchars($shareUrl) ?>');alert('Link kopiert!');return false;"
+         class="btn btn-outline-secondary">
+        <i class="bi bi-clipboard me-1"></i>Link kopieren
+      </a>
+    </div>
   </div>
 
   <div class="alert alert-info text-center">
