@@ -343,7 +343,6 @@ require_once 'navbar.inc.php';
         </p>
       </div>
     </div>
-      </div>
       <div class="mb-3">
         <label for="opGlobal" class="form-label">Allgemeine Skalen-Beschreibung</label>
         <textarea id="opGlobal" class="form-control" rows="2"
