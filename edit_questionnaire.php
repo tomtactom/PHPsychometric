@@ -322,19 +322,27 @@ require_once 'navbar.inc.php';
     <!-- Operationalisierung Card -->
     <div class="card mb-4"><div class="card-body">
       <h5 class="form-label">Operationalisierung</h5>
-      <div class="callout">
-        <h7>Wie operationalisiere ich mein Konstrukt?</h7>
-        <p>Eine <strong>Operationalisierung</strong> definiert klar, <strong>was genau</strong> mit deinem Konstrukt gemeint ist und wie sich dieses Konstrukt in den Items deines Fragebogens widerspiegelt. Dabei geht es darum, dein theoretisches Konzept in konkrete, beobachtbare Verhaltensweisen, Gedanken, Gefühle oder Einstellungen zu übersetzen.<br>
-        Deine Operationalisierung beantwortet beispielsweise diese Fragen:
-        <ul>
-          <li>Was genau bedeutet das Konstrukt in deinem Fragebogen?</li>
-          <li>An welchen konkreten Merkmalen (z. B. Verhalten, Gefühlen, Gedanken) erkennst du das Konstrukt?</li>
-          <li>Wie lässt sich das Konstrukt an den Formulierungen deiner Items ablesen?</li>
-        </ul>
-        <i>Beispiel (für „Pommes-Neid“): </i><br>
-        <i>„Das Konstrukt ‚Pommes-Neid‘ beschreibt in diesem Fragebogen das intensive Gefühl der Missgunst, wenn eine andere Person offensichtlich leckerere Pommes besitzt. Operationalisiert wird Pommes-Neid durch Items, die Gedanken (z. B. ‚Ich verdiene die besseren Pommes‘), Gefühle (z. B. tiefe Traurigkeit beim Anblick fremder Pommes) und Verhalten (z. B. heimliches Klauen von Pommes) erfassen.“</i><br>
-        Durch solch eine klare Operationalisierung wird nachvollziehbar, was dein Fragebogen tatsächlich misst und wie du dein theoretisches Konzept konkret abgrenzt.
-      </p>
+      <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#OperationalisierungInfo" aria-expanded="false" aria-controls="collapseExample">
+        Wie operationalisiere ich mein Konstrukt?
+      </button>
+    <div class="collapse" id="OperationalisierungInfo">
+      <div class="card card-body">
+        <p>
+          Eine <strong>Operationalisierung</strong> definiert klar, <strong>was genau</strong> mit deinem Konstrukt gemeint ist und wie sich dieses Konstrukt in den Items deines Fragebogens widerspiegelt. Dabei geht es darum, dein theoretisches Konzept in konkrete, beobachtbare Verhaltensweisen, Gedanken, Gefühle oder Einstellungen zu übersetzen.<br>
+          Deine Operationalisierung beantwortet beispielsweise diese Fragen:
+          <ul>
+            <li>Was genau bedeutet das Konstrukt in deinem Fragebogen?</li>
+            <li>An welchen konkreten Merkmalen (z. B. Verhalten, Gefühlen, Gedanken) erkennst du das Konstrukt?</li>
+            <li>Wie lässt sich das Konstrukt an den Formulierungen deiner Items ablesen?</li>
+          </ul>
+          <i>Beispiel (für „Pommes-Neid“): </i>
+          <div class="callout">
+            <i>„Das Konstrukt ‚Pommes-Neid‘ beschreibt in diesem Fragebogen das intensive Gefühl der Missgunst, wenn eine andere Person offensichtlich leckerere Pommes besitzt. Operationalisiert wird Pommes-Neid durch Items, die Gedanken (z. B. ‚Ich verdiene die besseren Pommes‘), Gefühle (z. B. tiefe Traurigkeit beim Anblick fremder Pommes) und Verhalten (z. B. heimliches Klauen von Pommes) erfassen.“</i><br>
+          </div><br>
+          Durch solch eine klare Operationalisierung wird nachvollziehbar, was dein Fragebogen tatsächlich misst und wie du dein theoretisches Konzept konkret abgrenzt.
+        </p>
+      </div>
+    </div>
       </div>
       <div class="mb-3">
         <label for="opGlobal" class="form-label">Allgemeine Skalen-Beschreibung</label>
