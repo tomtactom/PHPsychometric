@@ -326,7 +326,6 @@ require_once 'navbar.inc.php';
       <a class="btn btn-primary" data-toggle="collapse" href="#collapseExample" role="button" aria-expanded="false" aria-controls="collapseExample">
         Wie operationalisiere ich mein Konstrukt?
       </a>
-      </button>
     <div class="collapse" id="collapseExample">
       <div class="card card-body">
         <p>
