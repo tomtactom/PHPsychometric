@@ -322,10 +322,10 @@ require_once 'navbar.inc.php';
     <!-- Operationalisierung Card -->
     <div class="card mb-4"><div class="card-body">
       <h5 class="form-label">Operationalisierung</h5>
-      <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#OperationalisierungInfo" aria-expanded="false" aria-controls="OperationalisierungInfo">
+      <a class="btn btn-primary" data-toggle="collapse" href="#collapseExample" role="button" aria-expanded="false" aria-controls="collapseExample">
         Wie operationalisiere ich mein Konstrukt?
       </button>
-    <div class="collapse" id="OperationalisierungInfo">
+    <div class="collapse" id="collapseExample">
       <div class="card card-body">
         <p>
           Eine <strong>Operationalisierung</strong> definiert klar, <strong>was genau</strong> mit deinem Konstrukt gemeint ist und wie sich dieses Konstrukt in den Items deines Fragebogens widerspiegelt. Dabei geht es darum, dein theoretisches Konzept in konkrete, beobachtbare Verhaltensweisen, Gedanken, Gefühle oder Einstellungen zu übersetzen.<br>
