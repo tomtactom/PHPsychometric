@@ -320,10 +320,12 @@ require_once 'navbar.inc.php';
     </div></div>
 
     <!-- Operationalisierung Card -->
-    <div class="card mb-4"><div class="card-body">
+    <div class="card mb-4">
+      <div class="card-body">
       <h5 class="form-label">Operationalisierung</h5>
       <a class="btn btn-primary" data-toggle="collapse" href="#collapseExample" role="button" aria-expanded="false" aria-controls="collapseExample">
         Wie operationalisiere ich mein Konstrukt?
+      </a>
       </button>
     <div class="collapse" id="collapseExample">
       <div class="card card-body">
@@ -350,7 +352,8 @@ require_once 'navbar.inc.php';
       </div>
       <div id="subscaleOps" class="mb-3"></div>
       <input type="hidden" name="operationalization" id="operationalization">
-    </div></div>
+    </div>
+  </div>
 
     <button type="submit" class="btn btn-success"><?= $editing?"Speichern":"Fragebogen erstellen"?></button>
     <a href="edit_questionnaire.php" class="btn btn-link">Neuen Fragebogen anlegen</a>
