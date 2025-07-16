@@ -100,24 +100,25 @@ function barClass($p) { return $p < .33 ? 'bg-danger' : ($p < .66 ? 'bg-warning'
 function itemMax($c)  { return isLikert($c) ? $c : ($c === 0 ? 100 : 1); }
 
 /**
- * Intuitive Fünf‑Stufen‑Interpretation
+ * Intuitive Fünf‑Stufen‑Label ohne Normvorgabe
  */
-function interpret($value, $min, $max) {
+function interpretLabel($value, $min, $max) {
     $ratio = ($max - $min) > 0 ? ($value - $min) / ($max - $min) : 0.5;
-    if ($ratio >= 0.80) {
-        return "Sehr hoch";
-    }
-    if ($ratio >= 0.60) {
-        return "Hoch";
-    }
-    if ($ratio >= 0.40) {
-        return "Durchschnittlich";
-    }
-    if ($ratio >= 0.20) {
-        return "Niedrig";
-    }
+    if ($ratio >= 0.80) return "Sehr hoch";
+    if ($ratio >= 0.60) return "Hoch";
+    if ($ratio >= 0.40) return "Mittel";
+    if ($ratio >= 0.20) return "Niedrig";
     return "Sehr niedrig";
 }
+
+// Gesamt‑Werte für das Radial‑Chart
+list($overallMin, $overallMax) = minMax(count($R), $ct);
+$totalSum = calcSum($R, $ct);
+$overallPct = ($overallMax > $overallMin)
+            ? ($totalSum - $overallMin) / ($overallMax - $overallMin)
+            : 0;
+$overallLabel = interpretLabel($totalSum, $overallMin, $overallMax);
+$displayRaw   = number_format($totalSum / count($R), 1, ',', '') . ' von ' . itemMax($ct);
 
 // Teilnehmerzahl
 $stmt = $pdo->prepare("SELECT COUNT(DISTINCT user_id) FROM results WHERE questionnaire_id = ?");
@@ -129,10 +130,7 @@ $shareUrl  = (isset($_SERVER['HTTPS']) ? 'https' : 'http')
            . '://' . $_SERVER['HTTP_HOST']
            . dirname($_SERVER['REQUEST_URI'])
            . "/q.php?id={$qid}";
-$totalSum  = calcSum($R, $ct);
-$avg       = number_format($totalSum / count($R), 1, ',', '');
-$display   = "{$avg} von " . itemMax($ct);
-$shareText = rawurlencode("🎉 Mein Ergebnis bei „{$Q['name']}“: {$display}! " . $shareUrl);
+$shareText = rawurlencode("🎉 Mein Ergebnis bei „{$Q['name']}“: {$displayRaw}! " . $shareUrl);
 ?>
 <!doctype html>
 <html lang="de">
@@ -143,6 +141,39 @@ $shareText = rawurlencode("🎉 Mein Ergebnis bei „{$Q['name']}“: {$display}
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     body { background: #f2f4f8; }
+    .radial-progress {
+      --size: 140px;
+      --thickness: 12px;
+      --value: <?= round($overallPct*100) ?>;
+      width: var(--size);
+      height: var(--size);
+      border-radius: 50%;
+      background:
+        conic-gradient(
+          #0d6efd calc(var(--value) * 1%),
+          #e9ecef 0
+        );
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      color: #0d6efd;
+      margin: 0 auto 1rem;
+      position: relative;
+    }
+    .radial-progress::before {
+      content: '';
+      position: absolute;
+      width: calc(var(--size) - var(--thickness)*2);
+      height: calc(var(--size) - var(--thickness)*2);
+      background: #f2f4f8;
+      border-radius: 50%;
+    }
+    .radial-progress span {
+      position: relative;
+      z-index: 1;
+      font-size: 1.2rem;
+    }
     .hero {
       background: #fff; padding: 1.5rem; border-radius: .5rem;
       box-shadow: 0 4px 20px rgba(0,0,0,0.05);
@@ -154,10 +185,7 @@ $shareText = rawurlencode("🎉 Mein Ergebnis bei „{$Q['name']}“: {$display}
     }
     .subheader { font-weight: 600; margin-bottom: .5rem; }
     .subdesc  { color: #555; font-size: .95rem; margin-bottom: .75rem; }
-    .interpret {
-      font-weight: bold; margin-top: .5rem;
-      color: #333;
-    }
+    .interpret { font-weight: bold; margin-top: .5rem; color: #333; }
     .normcard, .sharecard {
       background: #fff; padding: 1.5rem; border-radius: .5rem;
       box-shadow: 0 4px 20px rgba(0,0,0,0.04); margin-bottom: 2rem;
@@ -167,12 +195,13 @@ $shareText = rawurlencode("🎉 Mein Ergebnis bei „{$Q['name']}“: {$display}
 <body>
 <div class="container py-5" style="max-width:800px;">
 
-  <!-- Hero -->
+  <!-- Gesamt‑Ergebnis -->
   <div class="hero">
-    <h2><?=htmlspecialchars($Q['name'])?></h2>
-    <?php if (!empty($ops['global'])): ?>
-      <p class="text-muted"><?=nl2br(htmlspecialchars($ops['global']))?></p>
-    <?php endif; ?>
+    <h2><?= htmlspecialchars($Q['name']) ?></h2>
+    <div class="radial-progress"><span><?= round($overallPct*100) ?> %</span></div>
+    <p class="h5 mb-1"><?= htmlspecialchars($displayRaw) ?></p>
+    <p class="interpret"><?= htmlspecialchars($overallLabel) ?></p>
+    <p class="small text-muted">Dies ist eine Roh‑Messung ohne Normvergleich.</p>
   </div>
 
   <!-- Subskalen -->
@@ -180,47 +209,40 @@ $shareText = rawurlencode("🎉 Mein Ergebnis bei „{$Q['name']}“: {$display}
     $n  = count($arr);
     list($mn, $mx) = minMax($n, $ct);
     $sum = calcSum($arr, $ct);
-    $pct = $mx > $mn ? ($sum - $mn) / ($mx - $mn) : 1;
+    $pct = ($mx > $mn) ? ($sum - $mn) / ($mx - $mn) : 0;
     $cls = barClass($pct);
     $label = ($scale === '_Gesamt') ? 'Gesamtergebnis' : htmlspecialchars($scale);
     $disp  = isLikert($ct) || $ct === 0
-           ? number_format($sum/$n,1,',','')." / ".itemMax($ct)
+           ? number_format($sum/$n,1,',','').' / '.itemMax($ct)
            : "{$sum} / {$mx}";
     $subdesc = $ops['subscales'][$scale] ?? '';
-    $interp  = interpret($sum, $mn, $mx);
+    $interp  = interpretLabel($sum, $mn, $mx);
   ?>
     <div class="subcard">
-      <div class="subheader"><?=$label?></div>
+      <div class="subheader"><?= $label ?></div>
       <?php if ($subdesc): ?>
-        <div class="subdesc"><?=nl2br(htmlspecialchars($subdesc))?></div>
+        <div class="subdesc"><?= nl2br(htmlspecialchars($subdesc)) ?></div>
       <?php endif; ?>
       <div class="progress mb-2">
-        <div class="progress-bar <?=$cls?>" style="width:<?=round($pct*100)?>%">
-          <?=$disp?>
+        <div class="progress-bar <?= $cls ?>" style="width:<?= round($pct*100) ?>%">
+          <?= htmlspecialchars($disp) ?>
         </div>
       </div>
-      <div class="text-secondary small">
-        <?php if (isLikert($ct) || $ct === 0): ?>
-          Mittelwert aus <?=$n?> Item<?=$n>1?'s':''?> (0 minimal, <?=itemMax($ct)?> maximal)
-        <?php else: ?>
-          Summenwert aus <?=$n?> Item<?=$n>1?'s':''?> (0 minimal, <?=$mx?> maximal)
-        <?php endif; ?>
-      </div>
-      <div class="interpret"><?=$interp?></div>
+      <div class="interpret"><?= htmlspecialchars($interp) ?></div>
     </div>
   <?php endforeach; ?>
 
-  <!-- Normwert‐Statistik -->
+  <!-- Normwert‑Statistik -->
   <div class="normcard">
     <h5>Normwert‑Statistik</h5>
-    <p>Teilnahmen bisher: <strong><?=$participants?></strong></p>
+    <p>Teilnahmen bisher: <strong><?= $participants ?></strong></p>
     <?php if ($participants < NORM_THRESHOLD): ?>
-      <p>Noch <strong><?=NORM_THRESHOLD - $participants?></strong> für aussagekräftige Normwerte.</p>
+      <p>Noch <strong><?= NORM_THRESHOLD - $participants ?></strong> für aussagekräftige Normwerte.</p>
     <?php else: ?>
-      <p class="text-success">Genügend für Normwerte (≥<?=NORM_THRESHOLD?>).</p>
+      <p class="text-success">Genügend für Normwerte (≥<?= NORM_THRESHOLD ?>).</p>
     <?php endif; ?>
     <?php if ($participants < CRONBACH_THRESHOLD): ?>
-      <p>Noch <strong><?=CRONBACH_THRESHOLD - $participants?></strong> für Cronbach’s Alpha.</p>
+      <p>Noch <strong><?= CRONBACH_THRESHOLD - $participants ?></strong> für Cronbach’s Alpha.</p>
     <?php else: ?>
       <p><strong>Cronbach’s Alpha</strong> wird berechnet.</p>
     <?php endif; ?>
@@ -230,9 +252,10 @@ $shareText = rawurlencode("🎉 Mein Ergebnis bei „{$Q['name']}“: {$display}
   <div class="sharecard text-center">
     <h5>Teile dein Ergebnis</h5>
     <p>Fordere Freunde heraus &amp; verbessere die Normwerte!</p>
-    <a href="mailto:?subject=Mein Ergebnis&body=<?=$shareText?>" class="btn btn-primary me-2">E‑Mail</a>
-    <a href="https://api.whatsapp.com/send?text=<?=$shareText?>" target="_blank"
-       class="btn btn-success">WhatsApp</a>
+    <a href="mailto:?subject=Mein Ergebnis&body=<?= $shareText ?>"
+       class="btn btn-primary me-2">E‑Mail</a>
+    <a href="https://api.whatsapp.com/send?text=<?= $shareText ?>"
+       target="_blank" class="btn btn-success">WhatsApp</a>
   </div>
 
   <div class="alert alert-info text-center">
@@ -240,5 +263,6 @@ $shareText = rawurlencode("🎉 Mein Ergebnis bei „{$Q['name']}“: {$display}
     Alle Angaben bleiben anonym.
   </div>
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <?php include('footer.inc.php'); ?>
