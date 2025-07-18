@@ -1,32 +1,25 @@
 <?php
 ob_start();
 require_once 'include.inc.php';
-$pageTitle       = $editing ? 'Fragebogen bearbeiten' : 'Neuen Fragebogen erstellen';
+$pageTitle       = $qid ? 'Fragebogen bearbeiten' : 'Neuen Fragebogen erstellen';
 $pageDescription = 'Erstelle oder bearbeite deinen Fragebogen';
 
 // --- Login-Schutz für Bearbeitung ---
 $qid = isset($_GET['id']) && ctype_digit($_GET['id']) ? intval($_GET['id']) : null;
 if ($qid !== null) {
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['access_password'])) {
+    if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['access_password'])) {
         $pw = trim($_POST['access_password']);
-        if (verify_admin($pw)) {
-            authorize($qid, true);
-        } elseif (verify_author($pdo, $qid, $pw)) {
-            authorize($qid);
-        } else {
-            $loginError = "Ungültiges Passwort.";
-        }
+        if (verify_admin($pw))        authorize($qid, true);
+        elseif (verify_author($pdo,$qid,$pw)) authorize($qid);
+        else                          $loginError="Ungültiges Passwort.";
     }
     if (!is_authorized($qid)) {
-        require_once 'navbar.inc.php';
-        ?>
+        require 'navbar.inc.php'; ?>
         <div class="container py-5">
           <div class="card mx-auto" style="max-width:400px">
             <div class="card-body">
               <h5 class="card-title">Nur für Autoren/Admins</h5>
-              <?php if (!empty($loginError)): ?>
-                <div class="alert alert-danger"><?= htmlspecialchars($loginError) ?></div>
-              <?php endif; ?>
+              <?= !empty($loginError) ? "<div class='alert alert-danger'>{$loginError}</div>" : '' ?>
               <form method="post" autocomplete="off">
                 <div class="mb-3">
                   <label class="form-label">Passwort</label>
@@ -38,360 +31,342 @@ if ($qid !== null) {
             </div>
           </div>
         </div>
-        </body></html>
-        <?php
+        </body></html><?php
         exit;
     }
 }
 
-// --- Sprachoptionen ---
-$langs = [
-    'DE'=>'Deutsch','EN'=>'Englisch','FR'=>'Französisch','IT'=>'Italienisch',
-    'ES'=>'Spanisch','TR'=>'Türkisch','RU'=>'Russisch','AR'=>'Arabisch',
-    'ZH'=>'Chinesisch','PT'=>'Portugiesisch','PL'=>'Polnisch','NL'=>'Niederländisch'
-];
-
-// --- ChoiceTypes ---
+// Sprach- & Skalentyp‑Optionen
+$langs = ['DE'=>'Deutsch','EN'=>'Englisch','FR'=>'Französisch','IT'=>'Italienisch',
+         'ES'=>'Spanisch','TR'=>'Türkisch','RU'=>'Russisch','AR'=>'Arabisch',
+         'ZH'=>'Chinesisch','PT'=>'Portugiesisch','PL'=>'Polnisch','NL'=>'Niederländisch'];
 $choice_types = [
-    0=>"Intervallskala (Schieberegler 0–100)",
-    1=>"Dual: Wahr / Falsch",
-    2=>"Dual: Stimme voll zu / Stimme nicht zu",
-    3=>"3-stufige Likert-Skala",
-    4=>"4-stufige Likert-Skala",
-    5=>"5-stufige Likert-Skala",
-    6=>"6-stufige Likert-Skala",
-    7=>"7-stufige Likert-Skala"
+    0=>"Intervallskala (0–100)",1=>"Dual: Wahr/Falsch",2=>"Dual: Stimme voll zu/nicht zu",
+    3=>"3‑stufige Likert",4=>"4‑stufige Likert",5=>"5‑stufige Likert",
+    6=>"6‑stufige Likert",7=>"7‑stufige Likert"
 ];
 
 // Initialisierung
-$editing       = false;
+$editing     = false;
 $questionnaire = null;
-$items         = [];
-$has_results   = false;
-$feedback      = null;
+$items       = [];
+$has_results = false;
+$feedback    = [];
+$operational = ['global'=>'','subscales'=>[]];
 
-// Laden für Bearbeitung
+// Laden
 if ($qid) {
-    $stmt = $pdo->prepare("SELECT * FROM questionnaires WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT * FROM questionnaires WHERE id=?");
     $stmt->execute([$qid]);
     $questionnaire = $stmt->fetch();
     if ($questionnaire) {
         $editing     = true;
-        $stmt = $pdo->prepare("SELECT * FROM items WHERE questionnaire_id = ? ORDER BY id ASC");
-        $stmt->execute([$qid]);
-        $items = $stmt->fetchAll();
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM results WHERE questionnaire_id = ?");
-        $stmt->execute([$qid]);
-        $has_results = $stmt->fetchColumn() > 0;
+        $has_results = $pdo->prepare("SELECT COUNT(*) FROM results WHERE questionnaire_id=?")
+                            ->execute([$qid]) && $pdo->query("SELECT COUNT(*)")->fetchColumn()>0;
+        // Operationalisierung aus JSON
+        $operational = json_decode($questionnaire['operationalization'] ?? '{}', true)
+                     ?: ['global'=>'','subscales'=>[]];
+        // Items
+        $items = $pdo->prepare("SELECT * FROM items WHERE questionnaire_id=? ORDER BY id")
+                     ->execute([$qid]) && $pdo->query("SELECT *")->fetchAll();
     }
 }
 
-// Formularverarbeitung
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['name'])) {
+// Verarbeiten
+if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['name'])) {
     $errors = [];
-
-    // Meta-Felder
+    // Meta
     $name        = trim($_POST['name'] ?? '');
     $short       = trim($_POST['short'] ?? '');
     $description = trim($_POST['description'] ?? '');
-    $language    = strtoupper(trim($_POST['language'] ?? ''));
+    $language    = strtoupper($_POST['language'] ?? '');
     $choice_type = isset($_POST['choice_type']) ? intval($_POST['choice_type']) : null;
     $copyright   = isset($_POST['copyright']);
+    $jsonOp      = $_POST['operationalization'] ?? '';
 
-    if (!$name)        $errors[] = "Bitte einen Namen angeben.";
-    if (!$description) $errors[] = "Bitte eine Beschreibung eingeben.";
-    if (!isset($langs[$language]))        $errors[] = "Bitte eine gültige Sprache wählen.";
-    if (!isset($choice_types[$choice_type])) $errors[] = "Bitte einen gültigen Skalentyp wählen.";
-    if (!$copyright)   $errors[] = "Bitte das Copyright bestätigen.";
-
-    // Autor-Passwort
+    $errors = array_merge($errors,
+        !$name        ? ["Name fehlt."] :
+        !$description ? ["Beschreibung fehlt."] : [],
+        !isset($langs[$language])        ? ["Sprache ungültig."] : [],
+        !isset($choice_types[$choice_type]) ? ["Skalentyp ungültig."] : [],
+        !$copyright   ? ["Copyright bestätigen."] : []
+    );
+    // Operationalisierung validieren
+    $opData = json_decode($jsonOp, true);
+    if (!is_array($opData) || !isset($opData['global'], $opData['subscales'])) {
+        $errors[] = "Operationalisierung fehlerhaft.";
+    }
+    // Passwort
     $author_hash = null;
-    if (isset($_POST['author_password']) && $_POST['author_password'] !== '') {
+    if (!empty($_POST['author_password'])) {
         $plain = trim($_POST['author_password']);
-        if (strlen($plain) < 8) {
-            $errors[] = "Autor-Passwort muss mindestens 8 Zeichen lang sein.";
-        } else {
-            $author_hash = password_hash($plain, PASSWORD_DEFAULT);
-        }
-    } elseif ($editing && $has_results && empty($_SESSION['is_admin'])) {
+        if (strlen($plain)<8) $errors[]="Autor-Passwort min. 8 Zeichen.";
+        else                  $author_hash = password_hash($plain,PASSWORD_DEFAULT);
+    } elseif ($editing && $has_results) {
         $author_hash = $questionnaire['author_password_hash'];
     }
-
     // Items
     $texts      = $_POST['item']  ?? [];
-    $scales     = $_POST['scale'] ?? [];
-    $negIndices = isset($_POST['negated'])
-                  ? array_map('intval', $_POST['negated'])
-                  : [];
+    $scalesArr  = $_POST['scale'] ?? [];
+    $negs       = $_POST['negated'] ?? [];
+    $clean_items=[];
+    foreach ($texts as $i=>$txt) {
+        $t=trim($txt); if($t==='') continue;
+        $s=trim($scalesArr[$i]??'');
+        $n = in_array($i,$negs,true) ? 1 : 0;
+        $clean_items[]=['text'=>$t,'scale'=>$s,'negated'=>$n];
+    }
+    if (empty($clean_items)) $errors[]="Mindestens ein Item.";
+    // Duplikate
+    $low=array_map(fn($it)=>mb_strtolower($it['text']),$clean_items);
+    if (count($low)!==count(array_unique($low))) $errors[]="Duplikate in Items.";
 
-    $clean_items = [];
-    foreach ($texts as $i => $text) {
-        $text = trim($text);
-        if ($text === '') continue;
-        $scale = trim($scales[$i] ?? '');
-        $neg   = in_array($i, $negIndices, true) ? 1 : 0;
-        $clean_items[] = ['text'=>$text,'scale'=>$scale,'negated'=>$neg];
-    }
-    if (count($clean_items) === 0) {
-        $errors[] = "Mindestens ein Item muss eingetragen werden.";
-    }
-    // Duplikate verhindern
-    $lower = array_map(fn($it)=>mb_strtolower($it['text']), $clean_items);
-    if (count($lower) !== count(array_unique($lower))) {
-        $errors[] = "Es sind doppelte Items vorhanden.";
-    }
-
-    // Speichern
     if (empty($errors)) {
+        // Insert/Update
         if ($editing) {
-            // Update Meta + Items
-            $updFields = $has_results
-                ? "name=?, short=?, language=?, description=?, updated_at=NOW()"
-                : "name=?, short=?, language=?, choice_type=?, description=?, updated_at=NOW()";
+            $fields = $has_results
+              ? "name,short,language,description,operationalization,author_password_hash,updated_at"
+              : "name,short,language,choice_type,description,operationalization,author_password_hash,updated_at";
+            $ph = $has_results
+              ? "?,?,?,?,?,?,NOW()"
+              : "?,?,?,?,?,?,?,NOW()";
             $params = $has_results
-                ? [$name,$short,$language,$description,$qid]
-                : [$name,$short,$language,$choice_type,$description,$qid];
-            $pdo->prepare("UPDATE questionnaires SET $updFields WHERE id=?")
-                ->execute($params);
-
+              ? [$name,$short,$language,$description,$jsonOp,$author_hash,$qid]
+              : [$name,$short,$language,$choice_type,$description,$jsonOp,$author_hash,$qid];
+            $pdo->prepare("UPDATE questionnaires SET $fields=? WHERE id=?")
+                 ->execute($params);
             if (!$has_results) {
-                $pdo->prepare("DELETE FROM items WHERE questionnaire_id=?")
-                    ->execute([$qid]);
-                $ins = $pdo->prepare("
-                    INSERT INTO items
-                      (questionnaire_id,item,negated,scale,created_at,updated_at)
-                    VALUES (?,?,?,?,NOW(),NOW())
-                ");
+                $pdo->prepare("DELETE FROM items WHERE questionnaire_id=?")->execute([$qid]);
+                $ins = $pdo->prepare("INSERT INTO items(questionnaire_id,item,negated,scale,created_at,updated_at) VALUES(?,?,?,? ,NOW(),NOW())");
                 foreach ($clean_items as $it) {
                     $ins->execute([$qid,$it['text'],$it['negated'],$it['scale']]);
                 }
             }
-
-            $feedback = ['type'=>'success','msg'=> $has_results
-                ? "Metadaten aktualisiert, Items gesperrt."
-                : "Fragebogen und Items aktualisiert."
-            ];
+            $feedback=['type'=>'success','msg'=>'Erfolgreich aktualisiert.'];
         } else {
-            // Neu anlegen
-            $pdo->prepare("
-                INSERT INTO questionnaires
-                  (name,short,language,choice_type,description,created_at,updated_at)
-                VALUES (?,?,?,?,?,NOW(),NOW())
-            ")->execute([$name,$short,$language,$choice_type,$description]);
+            $pdo->prepare("INSERT INTO questionnaires(name,short,language,choice_type,author_password_hash,description,operationalization,created_at,updated_at) VALUES(?,?,?,?,?,?,?,NOW(),NOW())")
+                ->execute([$name,$short,$language,$choice_type,$author_hash,$description,$jsonOp]);
             $new_qid = $pdo->lastInsertId();
-            $ins2 = $pdo->prepare("
-                INSERT INTO items
-                  (questionnaire_id,item,negated,scale,created_at,updated_at)
-                VALUES (?,?,?,?,NOW(),NOW())
-            ");
+            $ins2 = $pdo->prepare("INSERT INTO items(questionnaire_id,item,negated,scale,created_at,updated_at) VALUES(?,?,?,?,NOW(),NOW())");
             foreach ($clean_items as $it) {
                 $ins2->execute([$new_qid,$it['text'],$it['negated'],$it['scale']]);
             }
-            $feedback = ['type'=>'success','msg'=>"Fragebogen erstellt."];
-            $editing = false;
-            $items = [];
+            $feedback=['type'=>'success','msg'=>'Fragebogen erstellt.'];
+            $editing=false;
+            $questionnaire=null;
+            $items=[];
         }
-        // Reload Items
+        // Reload
         if ($editing) {
-            $stmtReload = $pdo->prepare("SELECT * FROM items WHERE questionnaire_id = ? ORDER BY id ASC");
-            $stmtReload->execute([$qid]);
-            $items = $stmtReload->fetchAll();
+            $items = $pdo->prepare("SELECT * FROM items WHERE questionnaire_id=? ORDER BY id")
+                         ->execute([$qid]) && $pdo->query("SELECT *")->fetchAll();
+            $operational = $opData;
         }
     } else {
-        $feedback = ['type'=>'danger','msg'=> implode('<br>',$errors)];
+        $feedback=['type'=>'danger','msg'=>implode('<br>',$errors)];
     }
 }
 
-// Ensure at least one blank row
-if (empty($items)) {
-    $items = [['text'=>'','scale'=>'','negated'=>0]];
-}
+// Mindestens eine Zeile
+if (empty($items)) $items=[['text'=>'','scale'=>'','negated'=>0]];
 
-// Lade Navbar
-require_once 'navbar.inc.php';
+require 'navbar.inc.php';
 ?>
 
 <div class="container py-4" style="max-width:900px;">
-  <h2 class="mb-3"><?= $editing ? "Fragebogen bearbeiten" : "Neuen Fragebogen erstellen" ?></h2>
+  <h2 class="mb-3"><?= $editing?'Fragebogen bearbeiten':'Neuen Fragebogen erstellen' ?></h2>
   <?php if (!empty($feedback)): ?>
     <div class="alert alert-<?= $feedback['type'] ?>"><?= $feedback['msg'] ?></div>
   <?php endif; ?>
 
   <form method="post" id="questionnaireForm" autocomplete="off">
-    <!-- Metadaten Card -->
     <div class="card mb-4"><div class="card-body">
       <div class="row mb-3">
-        <!-- Name -->
-        <div class="col-md-7 mb-3 mb-md-0">
+        <div class="col-md-7">
           <label class="form-label">Name *</label>
           <input name="name" class="form-control" required maxlength="255"
-                 value="<?= htmlspecialchars($questionnaire['name'] ?? '') ?>">
+                 value="<?= htmlspecialchars($questionnaire['name']??'') ?>">
         </div>
-        <!-- Kürzel -->
         <div class="col-md-5">
-          <label class="form-label">Kürzel (optional)</label>
+          <label class="form-label">Kürzel</label>
           <input name="short" class="form-control" maxlength="50"
-                 value="<?= htmlspecialchars($questionnaire['short'] ?? '') ?>">
+                 value="<?= htmlspecialchars($questionnaire['short']??'') ?>">
         </div>
       </div>
       <div class="row mb-3">
-        <?php
-          $lockMeta = (bool)$editing;
-          // Fallback auf POST oder DB
-          $valLang = $_POST['language'] ?? $questionnaire['language'] ?? '';
-          $valType = $_POST['choice_type'] ?? $questionnaire['choice_type'] ?? '';
-        ?>
-        <!-- Sprache -->
-        <div class="col-md-6 mb-3 mb-md-0">
+        <div class="col-md-6">
           <label class="form-label">Sprache *</label>
-          <select name="language" class="form-select" required <?= $lockMeta?'disabled':''?>>
-            <option value="">Bitte wählen</option>
-            <?php foreach($langs as $code=>$lang): ?>
-              <option value="<?=$code?>" <?= $valLang===$code?'selected':''?>>
-                <?= htmlspecialchars($lang) ?> (<?= $code ?>)
+          <select name="language" class="form-select" required>
+            <?php foreach($langs as $c=>$l): ?>
+              <option value="<?=$c?>" <?= (($questionnaire['language']??'')===$c)?'selected':'' ?>>
+                <?=$l?> (<?=$c?>)
               </option>
             <?php endforeach; ?>
           </select>
-          <?php if($lockMeta): ?>
-            <input type="hidden" name="language" value="<?= htmlspecialchars($valLang) ?>">
-          <?php endif; ?>
         </div>
-        <!-- Skalentyp -->
         <div class="col-md-6">
           <label class="form-label">Skalentyp *</label>
-          <select name="choice_type" class="form-select" required <?= $lockMeta?'disabled':''?>>
-            <option value="">Bitte wählen</option>
-            <?php foreach($choice_types as $val=>$txt): ?>
-              <option value="<?=$val?>" <?= ((string)$valType===(string)$val)?'selected':''?>>
-                <?= htmlspecialchars($txt) ?>
+          <select name="choice_type" class="form-select" <?= $editing&&$has_results?'disabled':''?> required>
+            <?php foreach($choice_types as $v=>$t): ?>
+              <option value="<?=$v?>" <?= (($questionnaire['choice_type']??'')==$v)?'selected':'' ?>>
+                <?=$t?>
               </option>
             <?php endforeach; ?>
           </select>
-          <?php if($lockMeta): ?>
-            <input type="hidden" name="choice_type" value="<?= htmlspecialchars($valType) ?>">
+          <?php if($editing&&$has_results): ?>
+            <input type="hidden" name="choice_type" value="<?= intval($questionnaire['choice_type']) ?>">
           <?php endif; ?>
         </div>
       </div>
-      <!-- Beschreibung -->
       <div class="mb-3">
         <label class="form-label">Beschreibung *</label>
-        <textarea name="description" class="form-control" required rows="2"><?= htmlspecialchars($questionnaire['description'] ?? '') ?></textarea>
+        <textarea name="description" class="form-control" required rows="2"><?= htmlspecialchars($questionnaire['description']??'') ?></textarea>
       </div>
-      <!-- Autor-Passwort -->
-      <?php if (!$has_results || !empty($_SESSION['is_admin'])): ?>
+      <?php if (!$has_results||!empty($_SESSION['is_admin'])): ?>
       <div class="mb-3">
-        <label class="form-label"><?= $editing ? "Autor-Passwort ändern" : "Autor-Passwort" ?> <small>(mind. 8 Zeichen)</small></label>
-        <input type="password" name="author_password" class="form-control" <?= $editing ? '' : 'required' ?> minlength="8">
-        <?php if ($editing && $questionnaire['author_password_hash']): ?>
-          <div class="form-text">Leer lassen, um nicht zu ändern.</div>
+        <label class="form-label"><?= $editing?'Autor-Passwort ändern':'Autor-Passwort' ?> <small>(8+ Zeichen)</small></label>
+        <input type="password" name="author_password" class="form-control" <?= $editing?'':'required'?> minlength="8">
+        <?php if($editing&&$questionnaire['author_password_hash']): ?>
+          <div class="form-text">Leer lassen, um beizubehalten</div>
         <?php endif; ?>
       </div>
       <?php endif; ?>
-      <!-- Copyright -->
       <div class="form-check mb-3">
         <input name="copyright" class="form-check-input" type="checkbox" required>
         <label class="form-check-label">Ich bestätige, dass ich Eigentümer bin.</label>
       </div>
     </div></div>
 
-    <!-- Items Card -->
     <div class="card mb-4"><div class="card-body">
       <label class="form-label mb-2">Items *</label>
-      <?php if ($has_results): ?>
-        <div class="alert alert-info">Items gesperrt (Ergebnisse vorhanden).</div>
+      <?php if($editing&&$has_results): ?>
+        <div class="alert alert-info">Items können nicht geändert werden (Ergebnisse vorhanden).</div>
       <?php endif; ?>
       <div id="itemsList">
-        <?php foreach ($items as $i => $it): ?>
+        <?php foreach($items as $i=>$it): ?>
         <div class="d-flex align-items-center mb-2 item-row">
-          <input name="item[]" class="form-control me-2" placeholder="Text *" required
-                 value="<?= htmlspecialchars($it['item']) ?>" <?= $has_results?'readonly':''?>>
+          <input name="item[]" class="form-control me-2" placeholder="Text *" required
+                 value="<?= htmlspecialchars($it['item'])?>" <?= $editing&&$has_results?'readonly':''?>>
           <input name="scale[]" class="form-control me-2" placeholder="Subskala (optional)"
-                 value="<?= htmlspecialchars($it['scale']) ?>" <?= $has_results?'readonly':''?>>
-          <input type="checkbox" name="negated[]" value="<?= $i ?>"
-                 class="form-check-input me-2" <?= $it['negated']?'checked':''?> <?= $has_results?'disabled':''?>>
-          <?php if (!$has_results): ?>
+                 value="<?= htmlspecialchars($it['scale'])?>" <?= $editing&&$has_results?'readonly':''?>>
+          <input type="checkbox" name="negated[]" value="<?=$i?>"
+                 class="form-check-input me-2" <?= $it['negated']?'checked':''?> <?= $editing&&$has_results?'disabled':''?>>
+          <?php if(!$editing||!$has_results):?>
             <button type="button" class="btn btn-link text-danger btn-remove-item px-2">&times;</button>
-          <?php endif; ?>
+          <?php endif;?>
         </div>
         <?php endforeach; ?>
       </div>
-      <?php if (!$has_results): ?>
-        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnAddItem">Weiteres Item hinzufügen</button>
-      <?php endif; ?>
+      <?php if(!$editing||!$has_results):?>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnAddItem">Weiteres Item</button>
+      <?php endif;?>
       <div class="mt-3 text-muted small" id="itemStats"></div>
     </div></div>
 
-    <button type="submit" class="btn btn-success"><?= $editing ? "Speichern" : "Fragebogen erstellen" ?></button>
-    <a href="edit_questionnaire.php" class="btn btn-link">Neuen Fragebogen anlegen</a>
+    <div class="card mb-4"><div class="card-body">
+      <h5 class="form-label">Operationalisierung</h5>
+      <div class="mb-3">
+        <label class="form-label">Allgemeine Beschreibung</label>
+        <textarea id="opGlobal" class="form-control" rows="2"><?= htmlspecialchars($operational['global']??'') ?></textarea>
+      </div>
+      <div id="subscaleOps"></div>
+      <input type="hidden" name="operationalization" id="operationalization">
+    </div></div>
+
+    <button type="submit" class="btn btn-success"><?= $editing?'Speichern':'Erstellen'?></button>
+    <a href="edit_questionnaire.php" class="btn btn-link">Abbrechen</a>
   </form>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-  const list   = document.getElementById('itemsList');
-  const addBtn = document.getElementById('btnAddItem');
-  const stats  = document.getElementById('itemStats');
+document.addEventListener('DOMContentLoaded', ()=>{
+  const list=document.getElementById('itemsList'),
+        addBtn=document.getElementById('btnAddItem'),
+        stats=document.getElementById('itemStats'),
+        opGlobal=document.getElementById('opGlobal'),
+        subOps=document.getElementById('subscaleOps'),
+        hiddenOp=document.getElementById('operationalization'),
+        form=document.getElementById('questionnaireForm'),
+        existing=<?= json_encode($operational) ?>;
 
-  function updateItemStats() {
-    const rows = list.querySelectorAll('.item-row');
-    let count = 0, scales = new Set();
-    rows.forEach((r, idx) => {
-      const txt = r.querySelector('input[name="item[]"]').value.trim();
-      if (txt) count++;
-      const sc = r.querySelector('input[name="scale[]"]').value.trim();
-      if (sc) scales.add(sc);
-      r.querySelector('input[type="checkbox"]').value = idx;
+  // Helper: Subskalen-Unique
+  function getSubscales(){
+    const set=new Set();
+    list.querySelectorAll('input[name="scale[]"]').forEach(inp=>{
+      const v=inp.value.trim();
+      if(v) set.add(v);
     });
-    let info = count + " Item" + (count !== 1 ? "s" : "");
-    if (scales.size) {
-      info += " | " + scales.size + " Subskala" + (scales.size !== 1 ? "en" : "") + ": " + [...scales].join(', ');
-    }
-    stats.innerText = info;
+    return [...set];
   }
-
-  if (addBtn) {
-    addBtn.addEventListener('click', () => {
-      const div = document.createElement('div');
-      div.className = 'd-flex align-items-center mb-2 item-row';
-      div.innerHTML = `
-        <input name="item[]" class="form-control me-2" placeholder="Text *" required>
-        <input name="scale[]" class="form-control me-2" placeholder="Subskala (optional)">
-        <input type="checkbox" name="negated[]" class="form-check-input me-2" value="0">
-        <button type="button" class="btn btn-link text-danger btn-remove-item px-2">&times;</button>
-      `;
-      list.appendChild(div);
-      updateItemStats();
+  // Render Subskala-Felder
+  function renderSubscaleFields(){
+    subOps.innerHTML='';
+    getSubscales().forEach(sc=>{
+      const d=document.createElement('div'); d.className='mb-3';
+      d.innerHTML=`
+        <label class="form-label">${sc} – Beschreibung</label>
+        <textarea class="form-control sub-op" data-name="${sc}" rows="1"
+          placeholder="z.B. ‚${sc} erfasst…‘">${existing.subscales[sc]||''}</textarea>`;
+      subOps.append(d);
     });
   }
-
-  list.addEventListener('click', e => {
-    if (e.target.classList.contains('btn-remove-item')) {
+  // Stats
+  function updateStats(){
+    let cnt=0, set=new Set();
+    list.querySelectorAll('.item-row').forEach((r,i)=>{
+      if(r.querySelector('input[name="item[]"]').value.trim()) cnt++;
+      const sc=r.querySelector('input[name="scale[]"]').value.trim();
+      if(sc) set.add(sc);
+      r.querySelector('input[type="checkbox"]').value=i;
+    });
+    let txt=`${cnt} Item${cnt!==1?'s':''}`;
+    if(set.size) txt+=` | ${set.size} Subskala${set.size!==1?'en':''}: ${[...set].join(', ')}`;
+    stats.textContent=txt;
+  }
+  // Add Row
+  if(addBtn) addBtn.onclick=()=>{
+    const div=document.createElement('div'); div.className='d-flex align-items-center mb-2 item-row';
+    div.innerHTML=`
+      <input name="item[]" class="form-control me-2" placeholder="Text *" required>
+      <input name="scale[]" class="form-control me-2" placeholder="Subskala (optional)">
+      <input type="checkbox" name="negated[]" class="form-check-input me-2" value="0">
+      <button type="button" class="btn btn-link text-danger btn-remove-item px-2">&times;</button>`;
+    list.append(div);
+    updateStats(); renderSubscaleFields();
+  };
+  // Remove Row
+  list.addEventListener('click',e=>{
+    if(e.target.classList.contains('btn-remove-item')){
       e.target.closest('.item-row').remove();
-      updateItemStats();
+      updateStats(); renderSubscaleFields();
     }
   });
-
-  list.addEventListener('input', e => {
-    if (e.target.matches('input[name="item[]"], input[name="scale[]"]')) {
-      const rows = list.querySelectorAll('.item-row');
-      const last = rows[rows.length - 1];
-      if (
-        e.target.matches('input[name="item[]"]') &&
-        last === e.target.closest('.item-row') &&
-        e.target.value.trim()
-      ) {
+  // Input Handler
+  list.addEventListener('input',e=>{
+    if(e.target.matches('input[name="item[]"],input[name="scale[]"]')){
+      const rows=list.querySelectorAll('.item-row'),
+            last=rows[rows.length-1];
+      if(e.target.matches('input[name="item[]"]') && last===e.target.closest('.item-row') && e.target.value.trim()){
         addBtn.click();
       }
-      updateItemStats();
+      updateStats(); renderSubscaleFields();
     }
   });
+  // On Submit → JSON
+  form.addEventListener('submit',()=>{
+    const data={global:opGlobal.value.trim(),subscales:{}};
+    subOps.querySelectorAll('.sub-op').forEach(ta=>{
+      const v=ta.value.trim();
+      if(v) data.subscales[ta.dataset.name]=v;
+    });
+    hiddenOp.value=JSON.stringify(data);
+  });
 
-  updateItemStats();
+  // Initial
+  updateStats();
+  renderSubscaleFields();
 });
 </script>
 
-<?php
-include('footer.inc.php');
-ob_end_flush();
-?>
+<?php include('footer.inc.php'); ob_end_flush(); ?>
