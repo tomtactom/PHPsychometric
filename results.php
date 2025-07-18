@@ -159,6 +159,10 @@ $scaleNames = [
     body { background: #f2f4f8; }
     .hero h2,
     .hero p { color: #212529 !important; }
+    /* Subdesc im Hero sichtbar machen */
+    .hero .subdesc { color: #555; margin-bottom: 1rem; }
+
+    /* Radial Progress */
     .radial-progress {
       --size: 140px; --thickness: 12px; --value: <?= round($overallPct*100) ?>;
       width: var(--size); height: var(--size); border-radius:50%;
@@ -173,16 +177,40 @@ $scaleNames = [
       background:#f2f4f8; border-radius:50%;
     }
     .radial-progress span { position:relative; z-index:1; font-weight:600; color:#0d6efd; }
+
+    /* Hero Card */
     .hero { background:#fff; padding:1.5rem; border-radius:.5rem;
             box-shadow:0 4px 20px rgba(0,0,0,0.05); text-align:center; margin-bottom:2rem; }
+
+    /* Subscale Cards */
     .subcard { background:#fff; padding:1rem; border-radius:.5rem;
                box-shadow:0 4px 20px rgba(0,0,0,0.04); margin-bottom:1.5rem; }
     .subheader { font-weight:600; margin-bottom:.5rem; }
-    .subdesc  { font-size:.95rem; margin-bottom:.75rem; } /* no color so HTML has its styles */
+    .subdesc  { font-size:.95rem; margin-bottom:.75rem; }
     .interpret { font-weight:bold; margin-top:.5rem; color:#333; }
+
+    /* Norm & Share Cards */
     .normcard, .sharecard { background:#fff; padding:1.5rem; border-radius:.5rem;
                             box-shadow:0 4px 20px rgba(0,0,0,0.04); margin-bottom:2rem; }
-    .sharecard .btn { min-width:160px; }
+    .sharecard .btn { min-width:140px; }
+
+    /* Modernes Details-Design (überall einsatzbar) */
+    details {
+      background: #f8f9fa; padding: .8rem 1rem; border-radius: .4rem;
+      border: 1px solid #dee2e6; margin-bottom: 1rem;
+    }
+    details summary {
+      font-weight: 600; cursor: pointer; outline: none;
+    }
+    details[open] { background: #e9ecef; }
+
+    /* Druck-Layout */
+    @media print {
+      nav, .sharecard, .btn, footer { display: none !important; }
+      body { background: #fff; }
+      .container { max-width: 100% !important; }
+      .subcard, .normcard, .hero { box-shadow: none !important; }
+    }
   </style>
 </head>
 <body>
@@ -203,12 +231,6 @@ $scaleNames = [
     <div class="radial-progress"><span><?= round($overallPct*100) ?> %</span></div>
     <p class="h5 mb-1"><?= htmlspecialchars($displayRaw) ?></p>
     <p class="interpret"><?= htmlspecialchars($overallLabel) ?></p>
-    <button class="btn btn-primary" id="btnWebShare">
-      <i class="bi bi-share-fill me-1"></i>Jetzt teilen
-    </button>
-    <button class="btn btn-outline-secondary" onclick="window.print()">
-      <i class="bi bi-printer me-1"></i>Drucken
-    </button>
   </div>
 
   <!-- Subskalen -->
@@ -226,20 +248,16 @@ $scaleNames = [
     $interp  = interpretLabel($sum, $mn, $mx);
   ?>
     <div class="subcard">
-      <div class="subheader"><i class="bi bi-bar-chart-fill me-1"></i><?= $label ?></div>
-
-      <?php if ($subdesc): ?>
-        <div class="subdesc">
-          <?= $subdesc /* rohes HTML! */ ?>
+      <details>
+        <summary><i class="bi bi-bar-chart-fill me-1"></i><?= $label ?></summary>
+        <?php if ($subdesc): ?>
+          <div class="subdesc"><?= $subdesc /* rohes HTML! */ ?></div>
+        <?php endif; ?>
+        <div class="progress mb-2">
+          <div class="progress-bar <?= $cls ?>" style="width:<?= round($pct*100) ?>%"><?= htmlspecialchars($disp) ?></div>
         </div>
-      <?php endif; ?>
-
-      <div class="progress mb-2">
-        <div class="progress-bar <?= $cls ?>" style="width:<?= round($pct*100) ?>%">
-          <?= htmlspecialchars($disp) ?>
-        </div>
-      </div>
-      <div class="interpret"><?= htmlspecialchars($interp) ?></div>
+        <div class="interpret"><?= htmlspecialchars($interp) ?></div>
+      </details>
     </div>
   <?php endforeach; ?>
 
@@ -259,12 +277,17 @@ $scaleNames = [
     <?php endif; ?>
   </div>
 
-  <!-- Share -->
+  <!-- Teilen & Drucken -->
   <div class="sharecard text-center">
-    <h5><i class="bi bi-share-fill me-1"></i>Weitere Kanäle</h5>
+    <h5><i class="bi bi-share-fill me-1"></i>Ergebnis teilen & drucken</h5>
     <div class="d-flex justify-content-center flex-wrap gap-2">
-      <a href="https://api.whatsapp.com/send?text=<?= $shareText ?>" target="_blank"
-         class="btn btn-success">
+      <button class="btn btn-primary" id="btnWebShare">
+        <i class="bi bi-share-fill me-1"></i>Web Share
+      </button>
+      <button class="btn btn-outline-secondary" onclick="window.print()">
+        <i class="bi bi-printer me-1"></i> Drucken
+      </button>
+      <a href="https://api.whatsapp.com/send?text=<?= $shareText ?>" target="_blank" class="btn btn-success">
         <i class="bi bi-whatsapp me-1"></i>WhatsApp
       </a>
       <a href="https://www.facebook.com/sharer/sharer.php?u=<?= rawurlencode($shareUrl) ?>"
