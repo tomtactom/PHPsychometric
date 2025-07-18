@@ -157,7 +157,6 @@ $scaleNames = [
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
   <style>
     body { background: #f2f4f8; }
-    /* Hero-Farben korrigiert */
     .hero h2,
     .hero p { color: #212529 !important; }
     .radial-progress {
@@ -179,11 +178,10 @@ $scaleNames = [
     .subcard { background:#fff; padding:1rem; border-radius:.5rem;
                box-shadow:0 4px 20px rgba(0,0,0,0.04); margin-bottom:1.5rem; }
     .subheader { font-weight:600; margin-bottom:.5rem; }
-    .subdesc  { color:#555; font-size:.95rem; margin-bottom:.75rem; }
+    .subdesc  { font-size:.95rem; margin-bottom:.75rem; } /* no color so HTML has its styles */
     .interpret { font-weight:bold; margin-top:.5rem; color:#333; }
     .normcard, .sharecard { background:#fff; padding:1.5rem; border-radius:.5rem;
                             box-shadow:0 4px 20px rgba(0,0,0,0.04); margin-bottom:2rem; }
-    /* Share-Buttons etwas größer */
     .sharecard .btn { min-width:160px; }
   </style>
 </head>
@@ -195,10 +193,13 @@ $scaleNames = [
     <h2><?= htmlspecialchars($Q['name']) ?></h2>
     <p><i class="bi bi-list-check"></i>
       <strong>Skalentyp:</strong> <?= $scaleNames[$ct] ?></p>
+
     <?php if (!empty($ops['global'])): ?>
-      <p class="text-muted small"><i class="bi bi-info-circle"></i>
-        <?= nl2br(htmlspecialchars($ops['global'])) ?></p>
+      <div class="subdesc">
+        <?= $ops['global'] /* rohes HTML! */ ?>
+      </div>
     <?php endif; ?>
+
     <div class="radial-progress"><span><?= round($overallPct*100) ?> %</span></div>
     <p class="h5 mb-1"><?= htmlspecialchars($displayRaw) ?></p>
     <p class="interpret"><?= htmlspecialchars($overallLabel) ?></p>
@@ -226,9 +227,13 @@ $scaleNames = [
   ?>
     <div class="subcard">
       <div class="subheader"><i class="bi bi-bar-chart-fill me-1"></i><?= $label ?></div>
+
       <?php if ($subdesc): ?>
-        <div class="subdesc"><?= nl2br(htmlspecialchars($subdesc)) ?></div>
+        <div class="subdesc">
+          <?= $subdesc /* rohes HTML! */ ?>
+        </div>
       <?php endif; ?>
+
       <div class="progress mb-2">
         <div class="progress-bar <?= $cls ?>" style="width:<?= round($pct*100) ?>%">
           <?= htmlspecialchars($disp) ?>
@@ -303,7 +308,6 @@ document.getElementById('btnWebShare').addEventListener('click', async () => {
     try { await navigator.share(data); }
     catch (e) { console.warn('Share abgebrochen', e); }
   } else {
-    // Fallback: Copy Link
     navigator.clipboard.writeText(data.url);
     alert('Link kopiert!');
   }
