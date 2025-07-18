@@ -213,6 +213,15 @@ footer {
   .container { padding: 0 1rem; }
 }
 
+/* Modernes Details-Design (überall einsatzbar) */
+details {
+  background: #f8f9fa; padding: .8rem 1rem; border-radius: .4rem;
+  border: 1px solid #dee2e6; margin-bottom: 1rem;
+}
+details summary {
+  font-weight: 600; cursor: pointer; outline: none;
+}
+details[open] { background: #e9ecef; }
 
 body {
     background: #f8fafc;
