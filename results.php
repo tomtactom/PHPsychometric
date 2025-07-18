@@ -100,9 +100,6 @@ function calcSum($arr, $c) {
 }
 function barClass($p) { return $p < .33 ? 'bg-danger' : ($p < .66 ? 'bg-warning' : 'bg-success'); }
 function itemMax($c)  { return isLikert($c) ? $c : ($c === 0 ? 100 : 1); }
-/**
- * Intuitive Fünf‑Stufen‑Label ohne Normvorgabe
- */
 function interpretLabel($value, $min, $max) {
     $ratio = ($max - $min) > 0 ? ($value - $min) / ($max - $min) : 0.5;
     if ($ratio >= 0.80) return "Sehr hoch";
@@ -151,18 +148,14 @@ $scaleNames = [
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Ergebnis | <?=htmlspecialchars($Q['name'])?></title>
-  <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
   <style>
     body { background: #f2f4f8; }
     .hero h2,
     .hero p { color: #212529 !important; }
-    /* Subdesc im Hero sichtbar machen */
     .hero .subdesc { color: #555; margin-bottom: 1rem; }
 
-    /* Radial Progress */
     .radial-progress {
       --size: 140px; --thickness: 12px; --value: <?= round($overallPct*100) ?>;
       width: var(--size); height: var(--size); border-radius:50%;
@@ -178,38 +171,27 @@ $scaleNames = [
     }
     .radial-progress span { position:relative; z-index:1; font-weight:600; color:#0d6efd; }
 
-    /* Hero Card */
     .hero { background:#fff; padding:1.5rem; border-radius:.5rem;
             box-shadow:0 4px 20px rgba(0,0,0,0.05); text-align:center; margin-bottom:2rem; }
 
-    /* Subscale Cards */
     .subcard { background:#fff; padding:1rem; border-radius:.5rem;
-               box-shadow:0 4px 20px rgba(0,0,0,0.04); margin-bottom:1.5rem; }
+               box-shadow:0 4px 20px rgba(0,0,0,0.04); margin-bottom:1.5rem;
+               page-break-inside: avoid; }
     .subheader { font-weight:600; margin-bottom:.5rem; }
-    .subdesc  { font-size:.95rem; margin-bottom:.75rem; }
+    .subdesc  { font-size:.95rem; margin-bottom:.75rem; color:#555; }
     .interpret { font-weight:bold; margin-top:.5rem; color:#333; }
 
-    /* Norm & Share Cards */
     .normcard, .sharecard { background:#fff; padding:1.5rem; border-radius:.5rem;
                             box-shadow:0 4px 20px rgba(0,0,0,0.04); margin-bottom:2rem; }
-    .sharecard .btn { min-width:140px; }
 
-    /* Modernes Details-Design (überall einsatzbar) */
-    details {
-      background: #f8f9fa; padding: .8rem 1rem; border-radius: .4rem;
-      border: 1px solid #dee2e6; margin-bottom: 1rem;
-    }
-    details summary {
-      font-weight: 600; cursor: pointer; outline: none;
-    }
-    details[open] { background: #e9ecef; }
-
-    /* Druck-Layout */
     @media print {
-      nav, .sharecard, .btn, footer { display: none !important; }
-      body { background: #fff; }
-      .container { max-width: 100% !important; }
-      .subcard, .normcard, .hero { box-shadow: none !important; }
+      nav, .sharecard, footer, .btn { display: none !important; }
+      body { background:#fff; }
+      .container { max-width:100% !important; padding:0; }
+      .hero { box-shadow:none; border:none; margin-bottom:2rem; }
+      .subcard, .normcard { box-shadow:none; border:none; }
+      /* Hero nur auf erster Seite */
+      .hero { break-after: page; }
     }
   </style>
 </head>
@@ -221,13 +203,11 @@ $scaleNames = [
     <h2><?= htmlspecialchars($Q['name']) ?></h2>
     <p><i class="bi bi-list-check"></i>
       <strong>Skalentyp:</strong> <?= $scaleNames[$ct] ?></p>
-
     <?php if (!empty($ops['global'])): ?>
       <div class="subdesc">
         <?= $ops['global'] /* rohes HTML! */ ?>
       </div>
     <?php endif; ?>
-
     <div class="radial-progress"><span><?= round($overallPct*100) ?> %</span></div>
     <p class="h5 mb-1"><?= htmlspecialchars($displayRaw) ?></p>
     <p class="interpret"><?= htmlspecialchars($overallLabel) ?></p>
@@ -248,16 +228,16 @@ $scaleNames = [
     $interp  = interpretLabel($sum, $mn, $mx);
   ?>
     <div class="subcard">
-      <details>
-        <summary><i class="bi bi-bar-chart-fill me-1"></i><?= $label ?></summary>
-        <?php if ($subdesc): ?>
-          <div class="subdesc"><?= $subdesc /* rohes HTML! */ ?></div>
-        <?php endif; ?>
-        <div class="progress mb-2">
-          <div class="progress-bar <?= $cls ?>" style="width:<?= round($pct*100) ?>%"><?= htmlspecialchars($disp) ?></div>
+      <div class="subheader"><i class="bi bi-bar-chart-fill me-1"></i><?= $label ?></div>
+      <?php if ($subdesc): ?>
+        <div class="subdesc"><?= $subdesc /* rohes HTML! */ ?></div>
+      <?php endif; ?>
+      <div class="progress mb-2">
+        <div class="progress-bar <?= $cls ?>" style="width:<?= round($pct*100) ?>%">
+          <?= htmlspecialchars($disp) ?>
         </div>
-        <div class="interpret"><?= htmlspecialchars($interp) ?></div>
-      </details>
+      </div>
+      <div class="interpret"><?= htmlspecialchars($interp) ?></div>
     </div>
   <?php endforeach; ?>
 
@@ -287,26 +267,31 @@ $scaleNames = [
       <button class="btn btn-outline-secondary" onclick="window.print()">
         <i class="bi bi-printer me-1"></i> Drucken
       </button>
-      <a href="https://api.whatsapp.com/send?text=<?= $shareText ?>" target="_blank" class="btn btn-success">
+      <a href="https://api.whatsapp.com/send?text=<?= $shareText ?>"
+         target="_blank" class="btn btn-success">
         <i class="bi bi-whatsapp me-1"></i>WhatsApp
       </a>
       <a href="https://www.facebook.com/sharer/sharer.php?u=<?= rawurlencode($shareUrl) ?>"
          target="_blank" class="btn btn-primary">
         <i class="bi bi-facebook me-1"></i>Facebook
       </a>
-      <a href="signal://share?message=<?= $shareText ?>" class="btn btn-info text-white">
+      <a href="signal://share?message=<?= $shareText ?>"
+         class="btn btn-info text-white">
         <i class="bi bi-chat-dots-fill me-1"></i>Signal
       </a>
       <button class="btn btn-danger"
-              onclick="navigator.clipboard.writeText('<?= htmlspecialchars($shareUrl) ?>');alert('Link kopiert. Öffne Instagram und füge ihn ein.');">
+              onclick="navigator.clipboard.writeText('<?= htmlspecialchars($shareUrl) ?>');
+                       alert('Link kopiert. Öffne Instagram und füge ihn ein.');">
         <i class="bi bi-instagram me-1"></i>Instagram
       </button>
       <button class="btn btn-warning text-white"
-              onclick="navigator.clipboard.writeText('<?= htmlspecialchars($shareUrl) ?>');alert('Link kopiert. Öffne TikTok und füge ihn ein.');">
+              onclick="navigator.clipboard.writeText('<?= htmlspecialchars($shareUrl) ?>');
+                       alert('Link kopiert. Öffne TikTok und füge ihn ein.');">
         <i class="bi bi-tiktok me-1"></i>TikTok
       </button>
       <button class="btn btn-dark"
-              onclick="navigator.clipboard.writeText('<?= htmlspecialchars($shareUrl) ?>');alert('Link kopiert. Öffne Threads und füge ihn ein.');">
+              onclick="navigator.clipboard.writeText('<?= htmlspecialchars($shareUrl) ?>');
+                       alert('Link kopiert. Öffne Threads und füge ihn ein.');">
         <i class="bi bi-chat-quote-fill me-1"></i>Threads
       </button>
     </div>
