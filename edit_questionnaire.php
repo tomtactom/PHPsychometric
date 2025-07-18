@@ -1,8 +1,14 @@
 <?php
 ob_start();
 require_once 'include.inc.php';
-$pageTitle       = 'Fragebogen bearbeiten';
+$pageTitle       = $editing ? 'Fragebogen bearbeiten' : 'Fragebogen erstellen';
 $pageDescription = 'Erstelle oder bearbeite deinen Fragebogen';
+
+// --- CSRF-Token erzeugen ---
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
+$_SESSION['csrf'] = bin2hex(random_bytes(16));
 
 // --- Login-Schutz für Bearbeitung ---
 $qid = isset($_GET['id']) && ctype_digit($_GET['id']) ? intval($_GET['id']) : null;
@@ -18,8 +24,7 @@ if ($qid !== null) {
         }
     }
     if (!is_authorized($qid)) {
-        require_once 'navbar.inc.php';
-        ?>
+        require_once 'navbar.inc.php'; ?>
         <div class="container py-5">
           <div class="card mx-auto" style="max-width:400px">
             <div class="card-body">
@@ -39,15 +44,16 @@ if ($qid !== null) {
           </div>
         </div>
         </body></html>
-        <?php
-        exit;
+        <?php exit;
     }
 }
 
 // --- Sprachoptionen ---
-$langs = [ 'DE'=>'Deutsch','EN'=>'Englisch','FR'=>'Französisch','IT'=>'Italienisch',
-          'ES'=>'Spanisch','TR'=>'Türkisch','RU'=>'Russisch','AR'=>'Arabisch',
-          'ZH'=>'Chinesisch','PT'=>'Portugiesisch','PL'=>'Polnisch','NL'=>'Niederländisch' ];
+$langs = [
+    'DE'=>'Deutsch','EN'=>'Englisch','FR'=>'Französisch','IT'=>'Italienisch',
+    'ES'=>'Spanisch','TR'=>'Türkisch','RU'=>'Russisch','AR'=>'Arabisch',
+    'ZH'=>'Chinesisch','PT'=>'Portugiesisch','PL'=>'Polnisch','NL'=>'Niederländisch'
+];
 // --- ChoiceTypes ---
 $choice_types = [
     0=>"Intervallskala (Schieberegler 0–100)",
@@ -67,6 +73,7 @@ $items         = [];
 $has_results   = false;
 $feedback      = null;
 $operational   = ['global'=>'','subscales'=>[]];
+$fieldErrors   = [];
 
 // Laden für Bearbeitung
 if ($qid) {
@@ -74,7 +81,7 @@ if ($qid) {
     $stmt->execute([$qid]);
     $questionnaire = $stmt->fetch();
     if ($questionnaire) {
-        $editing     = true;
+        $editing = true;
         // decode existing operationalization
         $operational = json_decode($questionnaire['operationalization'] ?? '{}', true)
                      ?: ['global'=>'','subscales'=>[]];
@@ -91,6 +98,11 @@ if ($qid) {
 
 // Formularverarbeitung
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['name'])) {
+    // CSRF prüfen
+    if (!hash_equals($_SESSION['csrf'], $_POST['csrf'] ?? '')) {
+        die('Ungültiger CSRF-Token');
+    }
+
     $errors = [];
 
     // Meta-Felder
@@ -102,29 +114,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['name'])) {
     $copyright   = isset($_POST['copyright']);
     $jsonOp      = $_POST['operationalization'] ?? '';
 
-    if (!$name)        $errors[] = "Bitte einen Namen angeben.";
-    if (!$description) $errors[] = "Bitte eine Beschreibung eingeben.";
-    if (!isset($langs[$language]))           $errors[] = "Bitte eine gültige Sprache wählen.";
-    if (!isset($choice_types[$choice_type])) $errors[] = "Bitte einen gültigen Skalentyp wählen.";
-    if (!$copyright)   $errors[] = "Bitte das Copyright bestätigen.";
-
+    if (!$name) {
+        $fieldErrors['name'][] = "Bitte einen Namen angeben.";
+    }
+    if (!$description) {
+        $fieldErrors['description'][] = "Bitte eine Beschreibung eingeben.";
+    }
+    if (!isset($langs[$language])) {
+        $fieldErrors['language'][] = "Bitte eine gültige Sprache wählen.";
+    }
+    if (!isset($choice_types[$choice_type])) {
+        $fieldErrors['choice_type'][] = "Bitte einen gültigen Skalentyp wählen.";
+    }
     // validate operational JSON
     $opData = @json_decode($jsonOp, true);
     if (!is_array($opData) || !isset($opData['global'], $opData['subscales']) || !is_array($opData['subscales'])) {
-        $errors[] = "Operationalisierung fehlerhaft.";
+        $fieldErrors['operationalization'][] = "Operationalisierung fehlerhaft.";
     }
-
-    // Autor-Passwort
-    $author_hash = null;
-    if (isset($_POST['author_password']) && $_POST['author_password'] !== '') {
-        $plain = trim($_POST['author_password']);
-        if (strlen($plain) < 8) {
-            $errors[] = "Autor-Passwort muss mindestens 8 Zeichen lang sein.";
-        } else {
-            $author_hash = password_hash($plain, PASSWORD_DEFAULT);
-        }
-    } elseif ($editing && $has_results && empty($_SESSION['is_admin'])) {
-        $author_hash = $questionnaire['author_password_hash'];
+    if (!$copyright) {
+        $fieldErrors['copyright'][] = "Bitte das Copyright bestätigen.";
     }
 
     // Items
@@ -143,16 +151,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['name'])) {
         $clean_items[] = ['text'=>$t,'scale'=>$s,'negated'=>$n];
     }
     if (empty($clean_items)) {
-        $errors[] = "Mindestens ein Item muss eingetragen werden.";
+        $fieldErrors['items'][] = "Mindestens ein Item muss eingetragen werden.";
     }
     // Duplikate prüfen
     $lower = array_map(fn($it)=>mb_strtolower($it['text']), $clean_items);
     if (count($lower) !== count(array_unique($lower))) {
-        $errors[] = "Es sind doppelte Items vorhanden.";
+        $fieldErrors['items'][] = "Es sind doppelte Items vorhanden.";
+    }
+
+    // sammeln aller Feld-Errors
+    foreach ($fieldErrors as $ferr) {
+        $errors = array_merge($errors, $ferr);
     }
 
     // Speichern
     if (empty($errors)) {
+        // Autor-Passwort
+        $author_hash = null;
+        if (isset($_POST['author_password']) && $_POST['author_password'] !== '') {
+            $plain = trim($_POST['author_password']);
+            if (strlen($plain) >= 8) {
+                $author_hash = password_hash($plain, PASSWORD_DEFAULT);
+            }
+        } elseif ($editing && $has_results && empty($_SESSION['is_admin'])) {
+            $author_hash = $questionnaire['author_password_hash'];
+        }
+
         if ($editing) {
             // Update questionnaires
             $updSQL = $has_results
@@ -174,6 +198,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['name'])) {
                     $ins->execute([$qid,$it['text'],$it['negated'],$it['scale']]);
                 }
             }
+
             $feedback = ['type'=>'success','msg'=> $has_results
                 ? "Metadaten und Operationalisierung aktualisiert, Items gesperrt."
                 : "Fragebogen, Items und Operationalisierung aktualisiert."
@@ -198,52 +223,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['name'])) {
             $editing = false;
             $items = [];
         }
-        // reload items
+        // reload questionnaire + operationalization
         if ($editing) {
+            $stmtReloadQ = $pdo->prepare("SELECT * FROM questionnaires WHERE id=?");
+            $stmtReloadQ->execute([$qid]);
+            $questionnaire = $stmtReloadQ->fetch();
+            $operational = json_decode($questionnaire['operationalization'] ?? '{}', true)
+                         ?: ['global'=>'','subscales'=>[]];
+            // reload items
             $stmtReload = $pdo->prepare("SELECT * FROM items WHERE questionnaire_id = ? ORDER BY id ASC");
             $stmtReload->execute([$qid]);
             $items = $stmtReload->fetchAll();
         }
-    } else {
-        $feedback = ['type'=>'danger','msg'=> implode('<br>',$errors)];
     }
 }
 
 // ensure blank row
 if (empty($items)) {
-    $items = [['text'=>'','scale'=>'','negated'=>0]];
+    $items = [['item'=>'','scale'=>'','negated'=>0]];
 }
 
 require_once 'navbar.inc.php';
 ?>
-
 <div class="container py-4" style="max-width:900px;">
   <h2 class="mb-3"><?= $editing ? "Fragebogen bearbeiten" : "Neuen Fragebogen erstellen" ?></h2>
   <?php if (!empty($feedback)): ?>
     <div class="alert alert-<?= $feedback['type'] ?>"><?= $feedback['msg'] ?></div>
   <?php endif; ?>
 
-  <form method="post" id="questionnaireForm" autocomplete="off">
+  <form method="post" id="questionnaireForm" autocomplete="off" novalidate>
+    <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['csrf']) ?>">
     <!-- Metadaten Card -->
     <div class="card mb-4"><div class="card-body">
       <!-- Name & Short -->
       <div class="row mb-3">
         <div class="col-md-7 mb-3 mb-md-0">
           <label class="form-label">Name *</label>
-          <input name="name" class="form-control" required maxlength="255"
+          <input name="name" id="field-name" class="form-control <?= isset($fieldErrors['name'])?'is-invalid':''?>" required maxlength="255"
                  value="<?= htmlspecialchars($questionnaire['name'] ?? '') ?>">
+          <?php if (isset($fieldErrors['name'])): ?>
+            <div class="invalid-feedback"><?= implode('<br>', $fieldErrors['name']) ?></div>
+          <?php endif; ?>
         </div>
         <div class="col-md-5">
           <label class="form-label">Kürzel (optional)</label>
-          <input name="short" class="form-control" maxlength="50"
+          <input name="short" id="field-short" class="form-control" maxlength="50"
                  value="<?= htmlspecialchars($questionnaire['short'] ?? '') ?>">
         </div>
       </div>
+
       <!-- Sprache & Skalentyp -->
       <div class="row mb-3">
         <div class="col-md-6 mb-3 mb-md-0">
           <label class="form-label">Sprache *</label>
-          <select name="language" class="form-select" required <?= $has_results?'disabled':''?>>
+          <select name="language" id="field-language" class="form-select <?= isset($fieldErrors['language'])?'is-invalid':''?>" required <?= $has_results?'disabled':''?>>
             <option value="">Bitte wählen</option>
             <?php foreach($langs as $code=>$lang): ?>
             <option value="<?=$code?>" <?=(($questionnaire['language']??'')===$code)?'selected':''?>>
@@ -251,13 +284,13 @@ require_once 'navbar.inc.php';
             </option>
             <?php endforeach; ?>
           </select>
-          <?php if($has_results):?>
-            <input type="hidden" name="language" value="<?=htmlspecialchars($questionnaire['language'])?>">
-          <?php endif;?>
+          <?php if (isset($fieldErrors['language'])): ?>
+            <div class="invalid-feedback"><?= implode('<br>', $fieldErrors['language']) ?></div>
+          <?php endif; ?>
         </div>
         <div class="col-md-6">
           <label class="form-label">Skalentyp *</label>
-          <select name="choice_type" class="form-select" required <?= $has_results?'disabled':''?>>
+          <select name="choice_type" id="field-choice_type" class="form-select <?= isset($fieldErrors['choice_type'])?'is-invalid':''?>" required <?= $has_results?'disabled':''?>>
             <option value="">Bitte wählen</option>
             <?php foreach($choice_types as $val=>$txt): ?>
             <option value="<?=$val?>" <?=(($questionnaire['choice_type']??'')==$val)?'selected':''?>>
@@ -265,130 +298,189 @@ require_once 'navbar.inc.php';
             </option>
             <?php endforeach;?>
           </select>
-          <?php if($has_results):?>
-            <input type="hidden" name="choice_type" value="<?=intval($questionnaire['choice_type'])?>">
-          <?php endif;?>
+          <?php if (isset($fieldErrors['choice_type'])): ?>
+            <div class="invalid-feedback"><?= implode('<br>', $fieldErrors['choice_type']) ?></div>
+          <?php endif; ?>
         </div>
       </div>
+
       <!-- Beschreibung -->
       <div class="mb-3">
         <label class="form-label">Beschreibung *</label>
-        <textarea name="description" class="form-control" required rows="2"><?=htmlspecialchars($questionnaire['description']??'')?></textarea>
+        <textarea name="description" id="field-description" class="form-control <?= isset($fieldErrors['description'])?'is-invalid':''?>" required rows="2"><?= htmlspecialchars($questionnaire['description'] ?? '') ?></textarea>
+        <?php if (isset($fieldErrors['description'])): ?>
+          <div class="invalid-feedback"><?= implode('<br>', $fieldErrors['description']) ?></div>
+        <?php endif; ?>
       </div>
-      <!-- Autor-Passwort -->
-      <?php if (!$has_results||!empty($_SESSION['is_admin'])): ?>
+
+      <!-- Operationalisierung -->
       <div class="mb-3">
-        <label class="form-label"><?= $editing?"Autor-Passwort ändern":"Autor-Passwort" ?> <small>(mind. 8 Zeichen)</small></label>
-        <input type="password" name="author_password" class="form-control" <?= $editing?'':'required' ?> minlength="8">
-        <?php if($editing && $questionnaire['author_password_hash']): ?>
-          <div class="form-text">Leer lassen, um nicht zu ändern.</div>
-        <?php endif;?>
+        <label class="form-label">Operationalisierung</label>
+        <textarea id="opGlobal" class="form-control <?= isset($fieldErrors['operationalization'])?'is-invalid':''?>" placeholder="Allgemeine Skalen-Beschreibung" rows="2"><?= htmlspecialchars($operational['global']) ?></textarea>
+        <?php if (isset($fieldErrors['operationalization'])): ?>
+          <div class="invalid-feedback"><?= implode('<br>', $fieldErrors['operationalization']) ?></div>
+        <?php endif; ?>
       </div>
-      <?php endif;?>
+      <div id="subscaleOps" class="mb-3"></div>
+      <input type="hidden" name="operationalization" id="operationalization">
+
       <!-- Copyright -->
       <div class="form-check mb-3">
-        <input name="copyright" class="form-check-input" type="checkbox" required>
+        <input name="copyright" id="field-copyright" class="form-check-input <?= isset($fieldErrors['copyright'])?'is-invalid':''?>" type="checkbox" required>
         <label class="form-check-label">Ich bestätige, dass ich Eigentümer bin.</label>
+        <?php if (isset($fieldErrors['copyright'])): ?>
+          <div class="invalid-feedback"><?= implode('<br>', $fieldErrors['copyright']) ?></div>
+        <?php endif; ?>
       </div>
     </div></div>
 
     <!-- Items Card -->
     <div class="card mb-4"><div class="card-body">
       <label class="form-label mb-2">Items *</label>
-      <?php if($has_results):?>
+      <?php if (isset($fieldErrors['items'])): ?>
+        <div class="alert alert-danger"><?= implode('<br>', $fieldErrors['items']) ?></div>
+      <?php elseif($has_results): ?>
         <div class="alert alert-info">Items gesperrt (Ergebnisse vorhanden).</div>
-      <?php endif;?>
+      <?php endif; ?>
       <div id="itemsList">
         <?php foreach($items as $i=>$it): ?>
         <div class="d-flex align-items-center mb-2 item-row">
-          <input name="item[]" class="form-control me-2" placeholder="Text *" required
-                 value="<?=htmlspecialchars($it['item'])?>" <?= $has_results?'readonly':''?>>
-          <input name="scale[]" class="form-control me-2" placeholder="Subskala (optional)"
-                 value="<?=htmlspecialchars($it['scale'])?>" <?= $has_results?'readonly':''?>>
-          <input type="checkbox" name="negated[]" value="<?=$i?>"
-                 class="form-check-input me-2" <?=($it['negated']?'checked':'')?> <?= $has_results?'disabled':''?>>
-          <?php if(!$has_results):?>
+          <span class="drag-handle fs-4 me-2">&#9776;</span>
+          <input name="item[]" class="form-control me-2" placeholder="Text *" required <?= $has_results?'readonly':''?>
+                 value="<?= htmlspecialchars($it['item']) ?>">
+          <input name="scale[]" class="form-control me-2" placeholder="Subskala (optional)" <?= $has_results?'readonly':''?>
+                 value="<?= htmlspecialchars($it['scale']) ?>">
+          <input type="checkbox" name="negated[]" value="<?= $i ?>"
+                 class="form-check-input me-2" <?= $it['negated']?'checked':''?> <?= $has_results?'disabled':''?>>
+          <?php if (!$has_results): ?>
             <button type="button" class="btn btn-link text-danger btn-remove-item px-2">&times;</button>
-          <?php endif;?>
+          <?php endif; ?>
         </div>
         <?php endforeach;?>
       </div>
-      <?php if(!$has_results):?>
+      <?php if (!$has_results):?>
         <button type="button" class="btn btn-outline-secondary btn-sm" id="btnAddItem">Weiteres Item hinzufügen</button>
       <?php endif;?>
       <div class="mt-3 text-muted small" id="itemStats"></div>
     </div></div>
 
-    <!-- Operationalisierung Card -->
-    <div class="card mb-4">
-      <div class="card-body">
-      <h5 class="form-label">Operationalisierung</h5>
-      <details>
-        <summary>Wie operationalisiere ich mein Konstrukt?</summary>
-        <div class="card card-body">
-          <p>
-            Eine <strong>Operationalisierung</strong> definiert klar, <strong>was genau</strong> mit deinem Konstrukt gemeint ist und wie sich dieses Konstrukt in den Items deines Fragebogens widerspiegelt. Dabei geht es darum, dein theoretisches Konzept in konkrete, beobachtbare Verhaltensweisen, Gedanken, Gefühle oder Einstellungen zu übersetzen.<br>
-            Deine Operationalisierung beantwortet beispielsweise diese Fragen:
-            <ul>
-              <li>Was genau bedeutet das Konstrukt in deinem Fragebogen?</li>
-              <li>An welchen konkreten Merkmalen (z. B. Verhalten, Gefühlen, Gedanken) erkennst du das Konstrukt?</li>
-              <li>Wie lässt sich das Konstrukt an den Formulierungen deiner Items ablesen?</li>
-            </ul>
-            <i>Beispiel (für „Pommes-Neid“): </i>
-            <div class="callout">
-              <i>„Das Konstrukt ‚Pommes-Neid‘ beschreibt in diesem Fragebogen das intensive Gefühl der Missgunst, wenn eine andere Person offensichtlich leckerere Pommes besitzt. Operationalisiert wird Pommes-Neid durch Items, die Gedanken (z. B. ‚Ich verdiene die besseren Pommes‘), Gefühle (z. B. tiefe Traurigkeit beim Anblick fremder Pommes) und Verhalten (z. B. heimliches Klauen von Pommes) erfassen.“</i><br>
-            </div><br>
-            Durch solch eine klare Operationalisierung wird nachvollziehbar, was dein Fragebogen tatsächlich misst und wie du dein theoretisches Konzept konkret abgrenzt.
-          </p>
-        </div>
-      </details>
-      <div class="mb-3">
-        <label for="opGlobal" class="form-label">Allgemeine Skalen-Beschreibung</label>
-        <textarea id="opGlobal" class="form-control" rows="2"
-          placeholder="z. B. ‚Diese Skala misst …‘"><?=htmlspecialchars($operational['global'])?></textarea>
-      </div>
-      <div id="subscaleOps" class="mb-3"></div>
-      <input type="hidden" name="operationalization" id="operationalization">
+    <div class="d-flex">
+      <button type="submit" class="btn btn-success"><?= $editing?"Speichern":"Fragebogen erstellen" ?></button>
+      <button type="button" class="btn btn-secondary ms-2" id="btnReset">Zurücksetzen</button>
     </div>
-  </div>
-
-    <button type="submit" class="btn btn-success"><?= $editing?"Speichern":"Fragebogen erstellen"?></button>
-    <a href="edit_questionnaire.php" class="btn btn-link">Neuen Fragebogen anlegen</a>
   </form>
 </div>
+
+<style>
+  .drag-handle:hover { transform: scale(1.1); transition: transform .2s; cursor: grab; }
+</style>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  // Elemente
+  const form       = document.getElementById('questionnaireForm');
   const list       = document.getElementById('itemsList');
   const addBtn     = document.getElementById('btnAddItem');
   const stats      = document.getElementById('itemStats');
   const opGlobal   = document.getElementById('opGlobal');
   const subscaleOps= document.getElementById('subscaleOps');
   const opHidden   = document.getElementById('operationalization');
-  // bestehende Ops
-  const existing   = <?= json_encode($operational) ?>;
+  const resetBtn   = document.getElementById('btnReset');
+  const qid        = <?= json_encode($qid) ?>;
+  const storageKey = 'edit_q_' + (qid||'new');
+  // capture initial data for reset
+  const initialData = formToObject();
 
-  // Items-Statistik
+  // Autosize textareas
+  function autosize(el) {
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  }
+  document.querySelectorAll('textarea').forEach(autosize);
+
+  // Form → Object
+  function formToObject(){
+    const data = {
+      name: form.name.value,
+      short: form.short.value,
+      description: form.description.value,
+      language: form.language.value,
+      choice_type: form.choice_type.value,
+      operational_global: opGlobal.value,
+      items: [],
+    };
+    document.querySelectorAll('.item-row').forEach((r,i)=>{
+      data.items.push({
+        item: r.querySelector('input[name="item[]"]').value,
+        scale: r.querySelector('input[name="scale[]"]').value,
+        negated: r.querySelector('input[name="negated[]"]').checked
+      });
+    });
+    document.querySelectorAll('#subscaleOps textarea').forEach(t=>{
+      data['sub_'+t.dataset.subscale] = t.value;
+    });
+    return data;
+  }
+  // Object → Form
+  function objectToForm(data){
+    form.name.value = data.name||'';
+    form.short.value = data.short||'';
+    form.description.value = data.description||'';
+    form.language.value = data.language||'';
+    form.choice_type.value = data.choice_type||'';
+    opGlobal.value = data.operational_global||'';
+    renderSubscaleFields();
+    // items
+    list.innerHTML = '';
+    data.items.forEach((it,idx)=>{
+      const div = document.createElement('div');
+      div.className='d-flex align-items-center mb-2 item-row';
+      div.innerHTML = `
+        <span class="drag-handle fs-4 me-2">&#9776;</span>
+        <input name="item[]" class="form-control me-2" placeholder="Text *" required value="${it.item||''}">
+        <input name="scale[]" class="form-control me-2" placeholder="Subskala (optional)" value="${it.scale||''}">
+        <input type="checkbox" name="negated[]" class="form-check-input me-2" ${it.negated?'checked':''}>
+        <button type="button" class="btn btn-link text-danger btn-remove-item px-2">&times;</button>`;
+      list.append(div);
+    });
+    updateItemStats();
+    document.querySelectorAll('textarea').forEach(autosize);
+  }
+
+  // Auto‑Save to localStorage
+  function saveToStorage(){
+    localStorage.setItem(storageKey, JSON.stringify(formToObject()));
+  }
+  // Load from localStorage if exists
+  const stored = localStorage.getItem(storageKey);
+  if (stored) {
+    try { objectToForm(JSON.parse(stored)); } catch{}
+  }
+
+  // Reset to initial DB state
+  resetBtn.addEventListener('click', ()=>{
+    objectToForm(initialData);
+    localStorage.removeItem(storageKey);
+  });
+
+  // Update stats & subscale fields
   function updateItemStats() {
     const rows = list.querySelectorAll('.item-row');
     let count=0, scales=new Set();
-    rows.forEach((r,i)=>{
-      const t=r.querySelector('input[name="item[]"]').value.trim();
+    rows.forEach((r,idx)=>{
+      const t = r.querySelector('input[name="item[]"]').value.trim();
       if(t) count++;
-      const s=r.querySelector('input[name="scale[]"]').value.trim();
+      const s = r.querySelector('input[name="scale[]"]').value.trim();
       if(s) scales.add(s);
-      r.querySelector('input[type="checkbox"]').value=i;
+      r.querySelector('input[name="negated[]"]').value=idx;
     });
     let info = `${count} Item${count!==1?'s':''}`;
     if(scales.size) info+= ` | ${scales.size} Subskala${scales.size!==1?'en':''}: ${[...scales].join(', ')}`;
     stats.innerText=info;
   }
 
-  // Subskala-Felder rendern
   function getSubscales() {
-    const set=new Set();
+    const set = new Set();
     list.querySelectorAll('input[name="scale[]"]').forEach(i=>{
       const v=i.value.trim();
       if(v) set.add(v);
@@ -398,59 +490,69 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderSubscaleFields(){
     subscaleOps.innerHTML='';
     getSubscales().forEach(name=>{
-      const d=document.createElement('div');d.className='mb-3';
-      const l=document.createElement('label');l.className='form-label';
-      l.textContent=name+' – Beschreibung';
+      const d=document.createElement('div'); d.className='mb-3';
+      const l=document.createElement('label'); l.className='form-label';
+      l.textContent = name+' – Beschreibung';
       const ta=document.createElement('textarea');
-      ta.className='form-control';ta.rows=1;ta.dataset.subscale=name;
+      ta.className='form-control'; ta.rows=1; ta.dataset.subscale=name;
       ta.placeholder=`z. B. ‚${name} erfasst …‘`;
-      if(existing.subscales[name]) ta.value=existing.subscales[name];
-      d.append(l,ta);subscaleOps.append(d);
+      if (initialData['sub_'+name]) ta.value=initialData['sub_'+name];
+      ta.addEventListener('input', ()=>{ autosize(ta); saveToStorage(); });
+      d.append(l,ta); subscaleOps.append(d);
     });
   }
 
-  // vor submit JSON setzen
-  document.getElementById('questionnaireForm').addEventListener('submit',()=>{
-    const data={ global:opGlobal.value.trim(), subscales:{} };
+  // Prepare hidden op JSON before submit
+  form.addEventListener('submit', ()=>{
+    const data = { global:opGlobal.value.trim(), subscales:{} };
     subscaleOps.querySelectorAll('textarea').forEach(ta=>{
       if(ta.value.trim()) data.subscales[ta.dataset.subscale]=ta.value.trim();
     });
-    opHidden.value=JSON.stringify(data);
+    opHidden.value = JSON.stringify(data);
+    localStorage.removeItem(storageKey);
   });
 
-  // Item-Logik
-  if(addBtn) addBtn.addEventListener('click',()=>{
-    const div=document.createElement('div');div.className='d-flex align-items-center mb-2 item-row';
+  // Item add/remove logic
+  if (addBtn) addBtn.addEventListener('click', ()=>{
+    const div=document.createElement('div'); div.className='d-flex align-items-center mb-2 item-row';
     div.innerHTML=`
+      <span class="drag-handle fs-4 me-2">&#9776;</span>
       <input name="item[]" class="form-control me-2" placeholder="Text *" required>
       <input name="scale[]" class="form-control me-2" placeholder="Subskala (optional)">
-      <input type="checkbox" name="negated[]" class="form-check-input me-2" value="0">
+      <input type="checkbox" name="negated[]" class="form-check-input me-2">
       <button type="button" class="btn btn-link text-danger btn-remove-item px-2">&times;</button>`;
-    list.append(div); updateItemStats(); renderSubscaleFields();
+    list.append(div);
+    updateItemStats();
+    renderSubscaleFields();
+    saveToStorage();
   });
-  list.addEventListener('click',e=>{
-    if(e.target.classList.contains('btn-remove-item')){
+  list.addEventListener('click', e=>{
+    if (e.target.classList.contains('btn-remove-item')) {
       e.target.closest('.item-row').remove();
-      updateItemStats(); renderSubscaleFields();
+      updateItemStats();
+      renderSubscaleFields();
+      saveToStorage();
     }
   });
-  list.addEventListener('input',e=>{
-    if(e.target.matches('input[name="item[]"],input[name="scale[]"]')){
+  list.addEventListener('input', e=>{
+    if (e.target.matches('input[name="item[]"], input[name="scale[]"]')) {
       const rows=list.querySelectorAll('.item-row');
       const last=rows[rows.length-1];
-      if(e.target.matches('input[name="item[]"]') && last===e.target.closest('.item-row') && e.target.value.trim()){
+      if (e.target.matches('input[name="item[]"]') && last===e.target.closest('.item-row') && e.target.value.trim()) {
         addBtn.click();
       }
-      updateItemStats(); renderSubscaleFields();
+      updateItemStats();
+      renderSubscaleFields();
+      saveToStorage();
     }
   });
 
-  // initial
+  // initial render
   updateItemStats();
   renderSubscaleFields();
+  form.querySelectorAll('textarea').forEach(autosize);
 });
 </script>
-
 <?php
 include('footer.inc.php');
 ob_end_flush();
