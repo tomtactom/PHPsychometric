@@ -1,4 +1,4 @@
-g<?php
+<?php
 ob_start();
 require_once 'include.inc.php';
 $pageTitle       = 'Fragebogen bearbeiten';
